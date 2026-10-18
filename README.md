@@ -52,7 +52,8 @@ Un clic bref, ou un tap sur le trackpad, fait un geste complet : une pelletée, 
 Le rendu est stylisé, façon diorama :
 - le plateau est découpé, avec ses tranches de sable, de socle et d'eau, et projette son ombre sur un fond gris ;
 - le sable est crème, moucheté de galets ;
-- l'eau du lagon est turquoise et vire au bleu profond dans les fosses, avec des caustiques sur le fond, des lignes de lumière en surface et de l'écume au rivage ;
+- l'eau est turquoise sur les hauts-fonds et vire au bleu profond au large et dans les fosses, avec des caustiques discrets sur le fond peu profond ;
+- l'écume naît là où les vagues déferlent (nombre de Froude élevé en eau peu profonde) et suit le jet de rive, à chaque vague ;
 - le décor est low-poly et animé : les herbes, les algues et les drapeaux bougent au vent et au courant ;
 - en post-traitement, des ombres douces, un bloom, un tonemapping ACES et un FXAA.
 

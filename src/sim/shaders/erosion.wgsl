@@ -87,7 +87,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   C = max(C - 0.05 * P.dt * smoothstep(0.9, 1.0, M), 0.0);
 
   // --- Foam: whitecaps on fast/breaking water and swash foam on the shore ---
+  // Breaking: in shallow water a wave breaks when the flow speed nears the wave celerity
+  // (high Froude number); that is where the white water of the surf and swash comes from.
+  let froude = speed / sqrt(9.81 * max(d, 0.005));
   let gen = 0.5 * smoothstep(1.3, 2.6, speed) * smoothstep(0.004, 0.04, d)
+          + 0.9 * smoothstep(0.35, 0.8, froude) * smoothstep(0.004, 0.02, d) * (1.0 - smoothstep(0.25, 0.6, d))
           + 0.3 * smoothstep(0.5, 1.6, speed) * smoothstep(0.002, 0.01, d) * (1.0 - smoothstep(0.03, 0.2, d));
   foam = clamp(foam + gen * P.dt * 4.0, 0.0, 1.0);
 

@@ -16,7 +16,7 @@ export function gridSize(): number {
 
 export const settings = {
   // Houle
-  waveAmp: 0.045,
+  waveAmp: 0.08,
   wavePeriod: 4.5,
   // Marée
   tideAmp: 0.1,

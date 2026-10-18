@@ -143,8 +143,9 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   // Caustics on the submerged bed (energy-conserving redistribution of the direct light).
   if (d > 0.003) {
     let ca = causticPattern(wp.xz * 2.6, t * 0.9);
-    let k = smoothstep(0.003, 0.06, d) * (1.0 - smoothstep(0.8, 2.5, d));
-    let mul = mix(1.0, 0.4 + 3.3 * ca, k);
+    // Soft and only in the shallows: the light network blurs out within a few tens of cm.
+    let k = smoothstep(0.003, 0.04, d) * (1.0 - smoothstep(0.12, 0.6, d));
+    let mul = mix(1.0, 0.75 + 1.4 * ca, k);
     col += alb / PI * sun * nl * shadow * (mul - 1.0);
   }
 

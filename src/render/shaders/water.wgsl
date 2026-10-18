@@ -167,15 +167,16 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   let shadow = shadowAt(wp, vec3f(0.0, 1.0, 0.0));
   let light = (sun * max(Ld.y, 0.0) * (0.55 + 0.45 * shadow) + ambientIrr(sky, vec3f(0.0, 1.0, 0.0))) / PI;
   let shallowC = vec3f(0.10, 0.78, 0.80);
-  let deepC = vec3f(0.0, 0.26, 0.58);
-  var bodyCol = mix(shallowC, deepC, smoothstep(0.06, 0.7, vdepth)) * light;
+  let midC = vec3f(0.0, 0.40, 0.64);
+  let deepC = vec3f(0.0, 0.10, 0.30);
+  var bodyCol = mix(mix(shallowC, midC, smoothstep(0.04, 0.3, vdepth)), deepC, smoothstep(0.3, 0.8, vdepth)) * light;
   // Stirred-up sand clouds the water.
   bodyCol = mix(bodyCol, vec3f(0.75, 0.68, 0.5) * light, clamp(sed * 60.0, 0.0, 0.8));
-  let opacity = clamp(1.0 - exp(-(vdepth * 2.0 + thick * 0.12 + sed * 80.0)), 0.0, 0.93);
+  let opacity = clamp(1.0 - exp(-(vdepth * 3.2 + thick * 0.12 + sed * 80.0)), 0.0, 0.95);
   let tint = mix(vec3f(1.0), vec3f(0.5, 0.97, 1.0), clamp(vdepth * 5.0, 0.0, 1.0));
   var refr = mix(behind * tint, bodyCol, opacity);
   // Bright wavy lines of light on the surface.
-  refr += sun * surfaceLines(wp.xz, t) * 0.018 * (0.4 + 0.6 * shadow) * smoothstep(0.01, 0.08, vdepth);
+  refr += sun * surfaceLines(wp.xz, t) * 0.004 * (0.4 + 0.6 * shadow) * smoothstep(0.01, 0.08, vdepth);
 
   // ----- Reflection -----
   let fr = fresnelSchlick(max(dot(n, V), 0.0), 0.02);

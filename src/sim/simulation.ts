@@ -50,6 +50,8 @@ export class Simulation {
   dtMax: number;
   sandVolume = 0;
   private lastVolumeFrame = -1000;
+  /** Simulated time owed to the water solver (fixed steps of dtMax). */
+  private stepDebt = 0;
 
   constructor(private device: GPUDevice, n: number) {
     this.n = n;
@@ -175,12 +177,17 @@ export class Simulation {
     this.device.queue.writeBuffer(this.params, slot * PARAM_STRIDE, this.paramData);
   }
 
-  /** Records `substeps` water steps + one sand step covering `frameDt` seconds (slower than real time if CFL-limited). */
+  /** Records the fixed-size water steps due for `frameDt` seconds + one sand step (slower than real time if capped). */
   encode(encoder: GPUCommandEncoder, frameDt: number): void {
-    // As many substeps as the CFL limit requires, up to the user-set maximum (slow motion beyond).
+    // Fixed time step: the pipe model sits close to its CFL limit, and a step size that changes
+    // from frame to frame (frame-pacing jitter) excites grid-scale waves until the surface blows up.
     const maxSteps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.round(settings.substeps)));
-    const steps = Math.min(maxSteps, Math.max(1, Math.ceil(frameDt / this.dtMax - 0.05)));
-    const dt = Math.min(this.dtMax, frameDt / steps);
+    const dt = this.dtMax;
+    this.stepDebt += frameDt;
+    const steps = Math.min(maxSteps, Math.floor(this.stepDebt / dt));
+    // Time beyond the substep budget is dropped (slow motion) rather than piling up.
+    this.stepDebt = Math.min(this.stepDebt - steps * dt, dt);
+    if (steps === 0) return;
     const wg = Math.ceil(this.n / 16);
     const p = this.pipelines;
     const pass = encoder.beginComputePass({ label: 'simulation' });
