@@ -11,6 +11,11 @@ npm run dev        # puis ouvrir l'URL affichée dans Chrome, Edge ou Safari (ma
 
 Le paramètre d'URL `?grid=256|384|512|768` fixe la résolution de la simulation. La valeur par défaut est 512, soit des cellules de 3,1 cm sur un plateau de 16 m × 16 m.
 
+## Plages et ambiances
+
+- **Plage aléatoire** : `N`, ou le bouton du panneau « Plage et ambiance », génère une nouvelle plage à partir d'une graine. Selon la graine, on obtient une baie ou un cap, des dunes plus ou moins hautes, un lagon relié ou non à la mer, des mares, une barre de sable au large, des amas de rochers et parfois un ponton. La graine s'affiche dans le panneau et dans l'URL (`?seed=1234`), pour retrouver une plage ; `0` ramène la plage d'origine.
+- **Ambiances** : `B` passe à la suivante, ou on la choisit dans la liste. Au choix : Après-midi, Matin, Midi, Soir, Ciel couvert, Tempête, Mer d'huile, Grande marée. Chaque ambiance règle le soleil, les nuages, le vent, la houle, la marée et le séchage, avec une transition de quelques secondes.
+
 ## Outils
 
 | Touche | Outil | Clic | Maj + clic | Alt + clic |
@@ -21,6 +26,7 @@ Le paramètre d'URL `?grid=256|384|512|768` fixe la résolution de la simulation
 | `4` | Moule à muraille | remplir | retourner : rempart crénelé (`F` pour tourner) | — |
 | `5` | Truelle | sculpter finement | lisser | aplanir à la hauteur visée (terrasses, escaliers) |
 | `6` | Décor | poser l'objet choisi | retirer l'objet le plus proche | — |
+| `7` | Seau géant | ramasser jusqu'à 4 m³ de sable (ou d'eau) sur une large zone | retourner : énorme tour, ou verser l'eau | — |
 
 Les objets de décor se choisissent dans la palette du panneau ou avec `C` (objet suivant) : drapeaux de quatre couleurs, coquillages, étoiles de mer, rochers, coraux, algues, oyats, buissons, bouteille et bouée. Ils suivent le relief du sable, et la bouteille comme la bouée flottent sur l'eau.
 
@@ -32,6 +38,8 @@ Un clic bref, ou un tap sur le trackpad, fait un geste complet : une pelletée, 
 - `Q`/`E` (`A`/`E` en AZERTY) font pivoter la vue par quarts de tour, `ZQSD`/`WASD` déplacent la caméra.
 - Marée : `T` met en pause, `+`/`-` changent la vitesse.
 - `R` réinitialise et `H` affiche ou masque l'aide.
+- `N` génère une plage aléatoire, `B` change d'ambiance.
+- `Y`, ou le bouton 🌊 du panneau, envoie un tsunami : une longue onde solitaire arrive du large et submerge la plage. Sa hauteur se règle dans « Houle ».
 
 ## Physique
 
@@ -44,7 +52,9 @@ Un clic bref, ou un tap sur le trackpad, fait un geste complet : une pelletée, 
   - érosion et dépôt selon la capacité de transport ;
   - sédiment transporté de façon conservative par les flux d'eau ;
   - humidité gérée par la nappe, la capillarité, le drainage, l'évaporation et l'infiltration ;
-  - suintement : un trou creusé sous le niveau de la nappe se remplit d'eau.
+  - suintement : un trou creusé sous le niveau de la nappe se remplit d'eau ;
+  - sape par les vagues : l'eau qui bat le pied d'un château (ou d'une falaise de dune) le détrempe et le détasse, non seulement en façade mais jusqu'à une trentaine de centimètres à l'intérieur. Le château s'affaisse donc par pans et perd de la hauteur, au lieu d'être grignoté sur le bord. Le sable qui s'éboule dans l'eau est détrempé et s'étale.
+- **Élancement** : le sable tassé ne tient une paroi raide que s'il fait partie d'un massif. Une aiguille isolée ou un angle trop fin s'effrite, alors que les murs, les tours et les créneaux tiennent.
 - **Outils** : un seul workgroup par action. Le volume échangé entre le terrain et l'outil (pelle, moules, truelle) est donc conservé exactement. Les moules déposent un corps tassé, surmonté de créneaux pour les moules crénelés, qui ne tient que si le sable est assez humide.
 
 ## Rendu

@@ -1,6 +1,6 @@
 // Single-scattering atmosphere (Rayleigh + Mie) baked into an equirectangular radiance map,
 // plus the sun irradiance and hemispherical ambient terms derived from it.
-struct SkyU { sunDir: vec4f, params: vec4f }
+struct SkyU { sunDir: vec4f, params: vec4f } // params.x = overcast (0..1)
 
 @group(0) @binding(0) var<uniform> U: SkyU;
 @group(0) @binding(1) var outTex: texture_storage_2d<rgba16float, write>;
@@ -89,14 +89,25 @@ fn bake(@builtin(global_invocation_id) gid: vec3u) {
   let phi = (uv.x - 0.5) * 2.0 * PI;
   let th = uv.y * PI;
   let d = vec3f(sin(th) * sin(phi), cos(th), -sin(th) * cos(phi));
-  textureStore(outTex, gid.xy, vec4f(scatter(d, normalize(U.sunDir.xyz)), 1.0));
+  let sun = normalize(U.sunDir.xyz);
+  var col = scatter(d, sun);
+  let ov = U.params.x;
+  if (ov > 0.0) {
+    // Cloud deck: grey, nearly uniform radiance (a little brighter overhead), no sun glow;
+    // the thicker it is, the darker.
+    let zen = dot(scatter(vec3f(0.0, 1.0, 0.0), sun), vec3f(0.2126, 0.7152, 0.0722));
+    var cloud = zen * 1.7 * (1.0 - 0.6 * ov) * (0.75 + 0.25 * max(d.y, 0.0)) * vec3f(0.9, 0.95, 1.0);
+    if (d.y < 0.0) { cloud *= mix(1.0, 0.25, smoothstep(0.0, 0.25, -d.y)); }
+    col = mix(col, cloud, ov);
+  }
+  textureStore(outTex, gid.xy, vec4f(col, 1.0));
 }
 
 @compute @workgroup_size(1)
 fn integrate() {
   let sun = normalize(U.sunDir.xyz);
   let ro = vec3f(0.0, RE + 2.0, 0.0);
-  let sunIrr = SUN_E * transmittance(ro, sun) * smoothstep(-0.02, 0.04, sun.y);
+  let sunIrr = SUN_E * transmittance(ro, sun) * smoothstep(-0.02, 0.04, sun.y) * (1.0 - 0.92 * U.params.x);
   let dims = vec2i(textureDimensions(inTex));
   var up = vec3f(0.0);
   var hor = vec3f(0.0);

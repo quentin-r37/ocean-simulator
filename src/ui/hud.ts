@@ -3,6 +3,17 @@ import { molds, settings, tideRising, toolSpec } from '../sim/params';
 import type { Simulation } from '../sim/simulation';
 import { isMold, ToolKind, Tools } from '../tools/tools';
 import { DECOR } from '../world/decor';
+import { AmbienceBlend, AMBIENCES } from '../world/ambience';
+
+/** Level / ambience controls provided by main. */
+export interface WorldControls {
+  ambience: AmbienceBlend;
+  /** Seed of the current beach (0 = the classic one) and options of the generator. */
+  state: { seed: number; randomAmbience: boolean };
+  randomBeach: () => void;
+  loadSeed: (seed: number) => void;
+  tsunami: () => void;
+}
 
 const TOOL_NAMES: Record<ToolKind, string> = {
   shovel: 'Pelle',
@@ -11,6 +22,7 @@ const TOOL_NAMES: Record<ToolKind, string> = {
   wall: 'Moule à muraille',
   trowel: 'Truelle',
   decor: 'Décor',
+  giant: 'Seau géant',
 };
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -20,11 +32,13 @@ export class Hud {
   private fpsFrames = 0;
   private fps = 0;
   private gui: GUI;
+  private amb = { name: AMBIENCES[0].name };
 
-  constructor(private tools: Tools, onReset: () => void, onScale: () => void) {
+  constructor(private tools: Tools, private world: WorldControls, onReset: () => void, onScale: () => void) {
     document.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) => {
       b.addEventListener('click', () => tools.select(b.dataset.tool as ToolKind));
     });
+    $('tsunami').addEventListener('click', () => world.tsunami());
     const pal = $('palette');
     for (const k of Tools.palette()) {
       const b = document.createElement('button');
@@ -36,18 +50,36 @@ export class Hud {
     }
 
     const gui = (this.gui = new GUI({ title: 'Réglages' }));
+    const level = gui.addFolder('Plage et ambiance');
+    level
+      .add(this.amb, 'name', AMBIENCES.map((a) => a.name))
+      .name('Ambiance (B)')
+      .onChange((n: string) => world.ambience.apply(AMBIENCES.findIndex((a) => a.name === n)))
+      .listen();
+    level.add(world, 'randomBeach').name('🎲 Plage aléatoire (N)');
+    level.add(world.state, 'randomAmbience').name('…avec ambiance au hasard');
+    level
+      .add(world.state, 'seed')
+      .step(1)
+      .name('Graine (0 = classique)')
+      .onFinishChange((v: number) => world.loadSeed(Math.max(0, Math.round(v))))
+      .listen();
     const waves = gui.addFolder('Houle');
-    waves.add(settings, 'waveAmp', 0, 0.4, 0.01).name('Hauteur (m)');
-    waves.add(settings, 'wavePeriod', 2.5, 10, 0.1).name('Période (s)');
+    waves.add(settings, 'waveAmp', 0, 0.4, 0.01).name('Hauteur (m)').listen();
+    waves.add(settings, 'wavePeriod', 2.5, 10, 0.1).name('Période (s)').listen();
+    waves.add(settings, 'tsunamiAmp', 0.1, 0.7, 0.01).name('Hauteur tsunami (m)');
+    waves.add(world, 'tsunami').name('🌊 Tsunami (Y)');
     const tide = gui.addFolder('Marée');
-    tide.add(settings, 'tideAmp', 0, 0.6, 0.01).name('Marnage ½ (m)');
-    tide.add(settings, 'tidePeriodMin', 2, 60, 1).name('Cycle (min)');
+    tide.add(settings, 'tideAmp', 0, 0.6, 0.01).name('Marnage ½ (m)').listen();
+    tide.add(settings, 'tidePeriodMin', 2, 60, 1).name('Cycle (min)').listen();
     tide.add(settings, 'tideSpeed', 0, 32, 0.5).name('Vitesse').listen();
     tide.add(settings, 'tidePaused').name('Pause').listen();
-    const sun = gui.addFolder('Soleil');
-    sun.add(settings, 'sunElevation', 2, 85, 0.5).name('Élévation (°)');
-    sun.add(settings, 'sunAzimuth', -180, 180, 1).name('Azimut (°)');
-    sun.add(settings, 'evaporation', 0, 1, 0.01).name('Séchage');
+    const sun = gui.addFolder('Soleil et météo');
+    sun.add(settings, 'sunElevation', 2, 85, 0.5).name('Élévation (°)').listen();
+    sun.add(settings, 'sunAzimuth', -180, 180, 1).name('Azimut (°)').listen();
+    sun.add(settings, 'overcast', 0, 1, 0.01).name('Nuages').listen();
+    sun.add(settings, 'wind', 0, 3, 0.05).name('Vent').listen();
+    sun.add(settings, 'evaporation', 0, 1, 0.01).name('Séchage').listen();
     const sand = gui.addFolder('Sable');
     sand.add(settings, 'dryAngle', 20, 45, 0.5).name('Angle sec (°)');
     sand.add(settings, 'wetAngle', 35, 80, 0.5).name('Angle humide (°)');
@@ -60,8 +92,8 @@ export class Hud {
     simF.add(settings, 'substeps', 1, 16, 1).name('Sous-pas max / image');
     simF.add({ reset: onReset }, 'reset').name('Réinitialiser la plage');
     const render = gui.addFolder('Rendu');
-    render.add(settings, 'exposure', 0.2, 3, 0.01).name('Exposition');
-    render.add(settings, 'bloom', 0, 0.3, 0.005).name('Halo');
+    render.add(settings, 'exposure', 0.2, 3, 0.01).name('Exposition').listen();
+    render.add(settings, 'bloom', 0, 0.3, 0.005).name('Halo').listen();
     render.add(settings, 'renderScale', 0.5, 2, 0.05).name('Résolution').onFinishChange(onScale);
     render.add(settings, 'showMoisture').name('Voir humidité');
     for (const f of [sand, simF, render]) f.close();
@@ -75,6 +107,7 @@ export class Hud {
       this.fpsAcc = 0;
       this.fpsFrames = 0;
     }
+    this.amb.name = AMBIENCES[this.world.ambience.current].name;
     const t = this.tools;
     document.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) => b.classList.toggle('active', b.dataset.tool === t.tool));
     $('palette').classList.toggle('show', t.tool === 'decor');
@@ -101,7 +134,11 @@ export class Hud {
       $('bucket-txt').textContent = f < 0.01 ? 'vide' : `${(inv.bucketSand * 1000).toFixed(1)} L · ${wetWord(inv.bucketM)}`;
     }
 
-    const rising = tideRising(sim.tideTime);
+    const ts = sim.tsunamiProgress;
+    const tsBtn = $('tsunami') as HTMLButtonElement;
+    tsBtn.disabled = ts !== null;
+    tsBtn.textContent = ts === null ? '🌊 Tsunami' : ts < 0.5 ? '🌊 La vague arrive…' : '🌊 Tsunami en cours…';
+    const rising = tideRising(sim.tidePhase);
     const speed = settings.tidePaused ? 'pause' : `×${settings.tideSpeed}`;
     $('tide-txt').textContent = `${sim.seaLevel >= 0 ? '+' : ''}${sim.seaLevel.toFixed(2)} m ${rising ? '↑' : '↓'} (${speed})`;
 

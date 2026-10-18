@@ -12,15 +12,20 @@ const GREEN: Vec3 = [0.05, 0.42, 0.12];
 const YELLOW: Vec3 = [0.8, 0.5, 0.03];
 const WHITE: Vec3 = [0.8, 0.8, 0.78];
 const STEEL: Vec3 = [0.55, 0.57, 0.6];
+const ORANGE: Vec3 = [0.85, 0.24, 0.02];
 const WOOD: Vec3 = [0.45, 0.28, 0.14];
 
-/** Round bucket: opening (radius rBase) at the top y = height, bottom (radius rTop) at y = 0. */
-export function buildBucket(spec: MoldSpec, col: Vec3, crenel: boolean): MeshData {
+/**
+ * Round bucket: opening (radius rBase) at the top y = height, bottom (radius rTop) at y = 0.
+ * `detail` scales the wall thickness, rim and handle (for big buckets).
+ */
+export function buildBucket(spec: MoldSpec, col: Vec3, crenel: boolean, detail = 1): MeshData {
   const b = new Builder();
   const rt = spec.rBase;
   const rb = spec.rTop;
   const h = spec.height;
-  const th = 0.005;
+  const d = detail;
+  const th = 0.005 * d;
   const slope = (rt - rb) / h;
   const wall = (inner: boolean) =>
     b.surface(48, 6, (u, v) => {
@@ -56,14 +61,14 @@ export function buildBucket(spec: MoldSpec, col: Vec3, crenel: boolean): MeshDat
     const a = (k / 64) * Math.PI * 2;
     rim.push([Math.cos(a) * (rt - th * 0.5), h, Math.sin(a) * (rt - th * 0.5)]);
   }
-  b.tube(rim, 0.007, col, 10, false);
+  b.tube(rim, 0.007 * d, col, 10, false);
   const arc: Vec3[] = [];
   for (let k = 0; k <= 32; k++) {
     const a = (k / 32) * Math.PI;
-    arc.push([Math.cos(a) * (rt + 0.012), h - 0.03 + Math.sin(a) * rt * 1.2, 0]);
+    arc.push([Math.cos(a) * (rt + 0.012 * d), h - 0.03 * d + Math.sin(a) * rt * 1.2, 0]);
   }
-  b.tube(arc, 0.0045, WHITE, 8);
-  for (const s of [-1, 1]) b.tube([[s * (rt - 0.002), h - 0.03, 0], [s * (rt + 0.016), h - 0.03, 0]], 0.012, col, 12);
+  b.tube(arc, 0.0045 * d, WHITE, 8);
+  for (const s of [-1, 1]) b.tube([[s * (rt - 0.002 * d), h - 0.03 * d, 0], [s * (rt + 0.016 * d), h - 0.03 * d, 0]], 0.012 * d, col, 12);
   return b.build();
 }
 
@@ -167,7 +172,7 @@ export function buildDome(): MeshData {
   return b.build();
 }
 
-export type ToolMeshId = 'bucket' | 'crenel' | 'wall' | 'shovel' | 'trowel' | 'disc' | 'dome' | 'box';
+export type ToolMeshId = 'bucket' | 'crenel' | 'wall' | 'giant' | 'shovel' | 'trowel' | 'disc' | 'dome' | 'box';
 
 export function toolMeshes(): Record<ToolMeshId, MeshData> {
   const box = new Builder();
@@ -176,6 +181,7 @@ export function toolMeshes(): Record<ToolMeshId, MeshData> {
     bucket: buildBucket(baseMolds.bucket, RED, false),
     crenel: buildBucket(baseMolds.crenel, BLUE, true),
     wall: buildWallMold(baseMolds.wall),
+    giant: buildBucket(baseMolds.giant, ORANGE, false, 3),
     shovel: buildShovel(),
     trowel: buildTrowel(),
     disc: buildDisc(),
@@ -282,6 +288,8 @@ export class ToolAnimator {
     const cap = molds[kind].cap;
     const inv = tools.inventory;
     const h = spec.height;
+    // Pouring / dipping motions are sized for the small bucket: scale them for bigger ones.
+    const big = kind === 'wall' ? 1 : spec.rBase / baseMolds.bucket.rBase;
     const t = tools.flipAge;
     let angle = 0;
     let lift = 0.03;
@@ -291,7 +299,7 @@ export class ToolAnimator {
       if (t < 0.3) {
         const e = smoothstep(0, 0.3, t);
         angle = Math.PI * e;
-        lift = 0.12 * Math.sin(Math.PI * e);
+        lift = 0.12 * big * Math.sin(Math.PI * e);
       } else if (t < 0.65) {
         angle = Math.PI;
         lift = 0;
@@ -304,8 +312,8 @@ export class ToolAnimator {
       }
     } else {
       angle = -0.45 * this.fillBlend - 1.9 * this.pourBlend;
-      lift = 0.03 - 0.06 * this.fillBlend + 0.32 * this.pourBlend;
-      pivotOffset = [0, 0, 0.12 * this.pourBlend];
+      lift = (0.03 - 0.06 * this.fillBlend + 0.32 * this.pourBlend) * big;
+      pivotOffset = [0, 0, 0.12 * this.pourBlend * big];
     }
     // Animated in mould-local units (scale 1), then scaled to world size.
     const model = compose(
@@ -317,7 +325,7 @@ export class ToolAnimator {
       mat4RotateX(angle),
       mat4Translate([0, -h / 2, 0]),
     );
-    const mesh: ToolMeshId = kind === 'bucket' ? 'bucket' : kind === 'crenel' ? 'crenel' : 'wall';
+    const mesh: ToolMeshId = kind;
     const items: DrawItem[] = [{ mesh, model, tint: [0, 0, 0, 0], params: [0.3, 0, 0, 0] }];
     const sandFrac = clamp(inv.bucketSand / cap, 0, 1);
     const waterFrac = clamp(inv.bucketWater / cap, 0, 1);

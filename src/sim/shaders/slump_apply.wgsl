@@ -47,15 +47,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let Snew = rem + inSum;
   var M = g.z;
   var C = g.w;
+  var w = water[i];
   if (inSum > 1e-7) {
     let wOld = min(rem, LAYER);
-    M = (g.z * wOld + inM) / (wOld + inSum);
+    // Sand sliding into water is soaked through (so the debris of a castle hit by the surf
+    // spreads out instead of piling up into a protective apron).
+    let mIn = select(inM, inSum, w.x > 0.004);
+    M = (g.z * wOld + mIn) / (wOld + inSum);
     C = g.w * wOld / (wOld + inSum);
   }
   groundOut[i] = vec4f(g.x, Snew, M, C);
 
   // Sand moving in/out under water displaces it, keeping the free surface level.
-  var w = water[i];
   if (w.x > 0.0) {
     w.x = max(0.0, w.x - (Snew - g.y));
     water[i] = w;

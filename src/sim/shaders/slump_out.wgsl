@@ -18,8 +18,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let i = u32(y * n + x);
   let g = ground[i];
   let H = g.x + g.y;
-  let t = critTan(g.z, g.w, hash11(i));
-  let hc = cohHeight(g.z, g.w);
+  // Slenderness: packing only holds a steep face up when the column belongs to a solid mass.
+  // Count the columns around (5×5) standing about as high: walls, towers and merlons have plenty,
+  // a thin spike left over by the surf or a sharp corner does not, and crumbles.
+  var mass = 0.0;
+  for (var oy = -2; oy <= 2; oy++) {
+    for (var ox = -2; ox <= 2; ox++) {
+      if ((ox != 0 || oy != 0) && inside(x + ox, y + oy)) {
+        let gm = ground[cidx(x + ox, y + oy)];
+        if (gm.x + gm.y >= H - 0.05) { mass += 1.0; }
+      }
+    }
+  }
+  let C = g.w * smoothstep(5.0, 12.0, mass);
+  let t = critTan(g.z, C, hash11(i));
+  let hc = cohHeight(g.z, C);
   var offs = OFFS;
   var ex: array<f32, 8>;
   var sum = 0.0;

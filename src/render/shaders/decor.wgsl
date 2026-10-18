@@ -42,15 +42,17 @@ fn vs_main(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   let sway = it.c.w;
   if (sway > 0.0 && !cloth) {
     let hgt = max(v.pos.y, 0.0);
+    let wind = mix(cam.env.x, 1.0, under);
     let speed = mix(1.9, 0.9, under);
     let ph = t * speed + seed * 40.0 + it.a.x * 0.7 + it.a.z * 0.5;
-    let amt = sway * hgt * hgt * mix(0.9, 2.2, under);
+    let amt = sway * hgt * hgt * mix(0.9, 2.2, under) * wind;
     lp.x += (sin(ph) * 0.7 + sin(ph * 2.3) * 0.3) * amt;
     lp.z += cos(ph * 0.8) * amt * 0.6;
   }
   if (cloth) {
     let k = v.pos.x / 0.13;
-    lp.z += sin(t * 7.0 + v.pos.x * 32.0 + seed * 10.0) * 0.018 * k;
+    let w = cam.env.x;
+    lp.z += sin(t * 7.0 + v.pos.x * 32.0 + seed * 10.0) * 0.018 * k * (0.3 + 0.7 * w);
     lp.y += sin(t * 5.0 + v.pos.x * 20.0) * 0.004 * k;
   }
 

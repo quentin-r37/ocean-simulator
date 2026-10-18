@@ -66,6 +66,12 @@
         font-size: 17px; width: 36px; height: 34px; cursor: pointer; padding: 0;
       }
       .palette button.active { border-color: var(--accent); background: rgba(242, 181, 68, 0.18); }
+      .big-btn {
+        width: 100%; margin-top: 8px; padding: 7px 8px; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600;
+        color: var(--text); border: 1px solid rgba(63, 181, 214, 0.6); background: rgba(63, 181, 214, 0.18);
+      }
+      .big-btn:hover:not(:disabled) { background: rgba(63, 181, 214, 0.32); }
+      .big-btn:disabled { cursor: default; opacity: 0.75; border-color: rgba(242, 181, 68, 0.7); background: rgba(242, 181, 68, 0.16); }
       .row { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
       .label { color: var(--muted); }
       .bar { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; margin: 2px 0 6px; }
@@ -108,6 +114,7 @@
         <button class="tool" data-tool="wall" title="Moule à muraille">🧱<kbd>4</kbd></button>
         <button class="tool" data-tool="trowel" title="Truelle">🔺<kbd>5</kbd></button>
         <button class="tool" data-tool="decor" title="Décor">🌴<kbd>6</kbd></button>
+        <button class="tool" data-tool="giant" title="Seau géant : déplace énormément de sable">🛢️<kbd>7</kbd></button>
       </div>
       <div id="tool-name" class="tool-name">Pelle</div>
       <div id="palette" class="palette"></div>
@@ -118,6 +125,7 @@
       <div class="row"><span class="label">Marée</span><span id="tide-txt">—</span></div>
       <div class="row"><span class="label">Visée</span><span id="aim-txt">—</span></div>
       <div class="row"><span class="label">Images/s</span><span id="fps-txt">—</span></div>
+      <button id="tsunami" class="big-btn" title="Envoie une énorme vague depuis le large (Y)">🌊 Tsunami</button>
     </div>
 
     <details id="help" class="panel" open>
@@ -126,9 +134,11 @@
         <li><b>Pelle</b> : clic creuser (pelle pleine : les déblais vont sur le bord du trou) · <kbd>Maj</kbd> vider · <kbd>Alt</kbd> tasser</li>
         <li><b>Seaux / moule</b> : clic remplir (sable, ou eau en visant la mer) · <kbd>Maj</kbd>+clic retourner (ou verser l'eau) · <kbd>F</kbd> tourner la muraille</li>
         <li><b>Truelle</b> : clic sculpter · <kbd>Maj</kbd> lisser · <kbd>Alt</kbd> aplanir à la hauteur visée (terrasses, escaliers)</li>
+        <li><b>Seau géant</b> (<kbd>7</kbd>) : comme le seau, mais il ramasse plusieurs m³ d'un coup sur une large zone (sable ou eau) pour déplacer des dunes entières</li>
         <li><b>Décor</b> : clic poser · <kbd>Maj</kbd>+clic retirer · <kbd>C</kbd> objet suivant</li>
         <li><kbd>Clic droit</kbd>/<kbd>Clic milieu</kbd> glisser : déplacer · <kbd>Molette</kbd> zoom · <kbd>Q</kbd>/<kbd>E</kbd> (<kbd>A</kbd>/<kbd>E</kbd> en AZERTY) tourner · <kbd>ZQSD</kbd>/<kbd>WASD</kbd> se déplacer</li>
         <li><kbd>T</kbd> pause marée · <kbd>+</kbd>/<kbd>-</kbd> vitesse · <kbd>R</kbd> réinitialiser · <kbd>H</kbd> aide</li>
+        <li><kbd>Y</kbd> tsunami · <kbd>N</kbd> nouvelle plage aléatoire · <kbd>B</kbd> ambiance suivante (matin, midi, soir, tempête…)</li>
         <li>Astuce : le sable humide tient en murs verticaux, le sec s'éboule. Arrosez vos tours !</li>
       </ul>
     </details>

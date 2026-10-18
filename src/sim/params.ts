@@ -18,6 +18,7 @@ export const settings = {
   // Houle
   waveAmp: 0.08,
   wavePeriod: 4.5,
+  tsunamiAmp: 0.45, // crest height of the tsunami (m)
   // Marée
   tideAmp: 0.1,
   tidePeriodMin: 12, // minutes simulées pour un cycle complet
@@ -27,6 +28,9 @@ export const settings = {
   sunElevation: 52,
   sunAzimuth: -35,
   evaporation: 0.5,
+  // Météo
+  wind: 1, // multiplies the sway of plants and flags and the ripples
+  overcast: 0, // cloud cover: greyer sky, weaker sun
   // Sable (angles en degrés)
   dryAngle: 34,
   wetAngle: 62,
@@ -46,7 +50,7 @@ export const settings = {
 
 export type Settings = typeof settings;
 
-export type MoldKind = 'bucket' | 'crenel' | 'wall';
+export type MoldKind = 'bucket' | 'crenel' | 'wall' | 'giant';
 
 export interface MoldSpec {
   cap: number; // m³
@@ -73,6 +77,8 @@ export const baseMolds: Record<MoldKind, MoldSpec> = {
   bucket: { cap: 0.145, height: 0.56, merlon: 0, rBase: 0.306, rTop: 0.262, halfLen: 0, halfWBase: 0, halfWTop: 0 },
   crenel: { cap: 0.15, height: 0.525, merlon: 0.1, rBase: 0.306, rTop: 0.275, halfLen: 0, halfWBase: 0, halfWTop: 0 },
   wall: { cap: 0.1, height: 0.32, merlon: 0.075, rBase: 0, rTop: 0, halfLen: 0.5, halfWBase: 0.16, halfWTop: 0.13 },
+  // Wide and squat so the tower it leaves stays under the height wet sand can hold (cohesion).
+  giant: { cap: 1.207, height: 0.7, merlon: 0, rBase: 0.8, rTop: 0.68, halfLen: 0, halfWBase: 0, halfWTop: 0 },
 };
 
 function scaleMold(m: MoldSpec, s: number): MoldSpec {
@@ -87,6 +93,7 @@ export const molds: Record<MoldKind, MoldSpec> = {
   bucket: scaleMold(baseMolds.bucket, TOOL_SCALE),
   crenel: scaleMold(baseMolds.crenel, TOOL_SCALE),
   wall: scaleMold(baseMolds.wall, TOOL_SCALE),
+  giant: scaleMold(baseMolds.giant, TOOL_SCALE),
 };
 
 export const toolSpec = {
@@ -100,15 +107,16 @@ export const toolSpec = {
   /** Time (s) to fill the shovel / a mould while digging. */
   digTime: 0.45,
   fillTime: 0.45,
+  /** The giant bucket scoops from a much wider area, and takes longer to fill. */
+  giantFillRadius: 1.5 * TOOL_SCALE,
+  giantFillTime: 1.1,
 };
 
-/** Sea level for a point of the tide cycle (starts at mid tide, rising). */
-export function tideLevel(tideTime: number, s: Settings = settings): number {
-  const period = s.tidePeriodMin * 60;
-  return s.tideAmp * Math.sin((2 * Math.PI * tideTime) / period);
+/** Sea level for a point of the tide cycle (phase in cycles; 0 = mid tide, rising). */
+export function tideLevel(tidePhase: number, s: Settings = settings): number {
+  return s.tideAmp * Math.sin(2 * Math.PI * tidePhase);
 }
 
-export function tideRising(tideTime: number, s: Settings = settings): boolean {
-  const period = s.tidePeriodMin * 60;
-  return Math.cos((2 * Math.PI * tideTime) / period) > 0;
+export function tideRising(tidePhase: number): boolean {
+  return Math.cos(2 * Math.PI * tidePhase) > 0;
 }

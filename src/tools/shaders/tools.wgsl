@@ -1,4 +1,5 @@
-// Shovel & bucket. Runs as ONE workgroup over a 128×128-cell window centred on the aimed point,
+// Shovel & bucket. Runs as ONE workgroup over a 128×128-cell window (256×256 for the giant bucket)
+// centred on the aimed point,
 // so every transfer between the terrain and the tool inventory is exactly volume-conserving.
 struct ToolU {
   mode: u32, n: u32, frame: u32, moldType: u32,
@@ -6,7 +7,7 @@ struct ToolU {
   shovelCap: f32, fillCap: f32, rBase: f32, rTop: f32,
   moldH: f32, merlon: f32, halfLen: f32, halfWBase: f32,
   halfWTop: f32, moldAngle: f32, targetH: f32, digRate: f32,
-  fillRate: f32, scale: f32, _p1: f32, _p2: f32,
+  fillRate: f32, scale: f32, cellsPerSide: f32, _p2: f32,
 }
 struct Inv {
   shovelSand: f32, shovelM: f32, bucketSand: f32, bucketM: f32,
@@ -27,10 +28,6 @@ const MODE_POUR: u32 = 6u;
 const MODE_CARVE: u32 = 7u;
 const MODE_SMOOTH: u32 = 8u;
 const MODE_FLATTEN: u32 = 9u;
-const WIN: i32 = 128;
-// Cells per thread side (WIN / 16) and per thread.
-const CPS: i32 = 8;
-const CPT: i32 = 64;
 const LAYER: f32 = 0.06;
 // The trowel keeps working when the shovel is full: its shavings may overfill it this much.
 const TROWEL_SPILL: f32 = 10.0;
@@ -39,6 +36,9 @@ var<workgroup> red: array<f32, 256>;
 var<private> origin: vec2i;
 var<private> center: vec2f;
 var<private> lid2: vec2i;
+// Cells per thread side (window / 16) and per thread.
+var<private> CPS: i32;
+var<private> CPT: i32;
 
 fn wsum(li: u32, v: f32) -> f32 {
   red[li] = v;
@@ -483,8 +483,10 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
   let h2 = hit[2];
   let valid = select(0.0, 1.0, h0.w > 0.5);
   center = vec2f(h0.x, h0.z) / U.dx - 0.5;
-  origin = vec2i(floor(center)) - vec2i(WIN / 2);
   lid2 = vec2i(lid.xy);
+  CPS = i32(U.cellsPerSide);
+  CPT = CPS * CPS;
+  origin = vec2i(floor(center)) - vec2i(CPS * 8);
 
   let I = inv;
   workgroupBarrier();
@@ -531,7 +533,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
   } else if (U.mode == MODE_POUR) {
     // A full bucket empties in under a second (same pace as filling it).
     let vol = min(I.bucketWater, U.fillRate * 0.6 * U.dt) * valid;
-    addWater(li, 0.15 * U.scale, vol);
+    addWater(li, select(0.15 * U.scale, U.rBase * 0.6, U.moldType == 3u), vol);
     if (li == 0u) { inv.bucketWater = max(I.bucketWater - vol, 0.0); }
   } else if (U.mode == MODE_CARVE) {
     let room = max(U.shovelCap * TROWEL_SPILL - I.shovelSand, 0.0);

@@ -15,6 +15,10 @@ import reduceWgsl from './shaders/reduce.wgsl?raw';
 const PARAM_BYTES = 128;
 const PARAM_STRIDE = 256;
 const deg = (a: number) => Math.tan((a * Math.PI) / 180);
+/** Half-width of the tsunami hump (m), as TSUNAMI_WIDTH in waves.wgsl. */
+const TSUNAMI_WIDTH = 8;
+/** The crest starts this many widths beyond the open edge, so the sea rises smoothly. */
+const TSUNAMI_LEAD = 2.5;
 
 /**
  * GPU beach simulation on an n×n grid.
@@ -44,7 +48,8 @@ export class Simulation {
   readonly partialCount: number;
 
   simTime = 0;
-  tideTime = 0;
+  /** Position in the tide cycle (cycles), so the cycle length can change without a jump. */
+  tidePhase = 0;
   seaLevel = 0;
   frame = 0;
   dtMax: number;
@@ -52,6 +57,8 @@ export class Simulation {
   private lastVolumeFrame = -1000;
   /** Simulated time owed to the water solver (fixed steps of dtMax). */
   private stepDebt = 0;
+  /** Running tsunami: start time (sim time), crest height and celerity; null when none. */
+  private tsunami: { start: number; amp: number; speed: number } | null = null;
 
   constructor(private device: GPUDevice, n: number) {
     this.n = n;
@@ -124,7 +131,8 @@ export class Simulation {
 
   reset(): void {
     this.simTime = 0;
-    this.tideTime = 0;
+    this.tidePhase = 0;
+    this.tsunami = null;
     this.seaLevel = tideLevel(0);
     const { ground, water } = buildBeach(this.n, this.seaLevel);
     const q = this.device.queue;
@@ -135,6 +143,26 @@ export class Simulation {
     q.writeBuffer(this.flux, 0, zeros);
     q.writeBuffer(this.aux[0], 0, zeros);
     q.writeBuffer(this.aux[1], 0, zeros);
+  }
+
+  /** Sends a tsunami from the open sea; it reaches the diorama after a few seconds. */
+  triggerTsunami(amp: number): void {
+    if (this.tsunami) return;
+    // Solitary wave celerity √(g(h + a)).
+    this.tsunami = { start: this.simTime, amp, speed: Math.sqrt(GRAVITY * (this.boundaryDepth() + amp)) };
+  }
+
+  /** Progress of the running tsunami: 0 = just sent, 1 = crest past the open edge; null when none. */
+  get tsunamiProgress(): number | null {
+    if (!this.tsunami) return null;
+    const travel = this.tsunami.speed * (this.simTime - this.tsunami.start);
+    return Math.min(travel / (2 * TSUNAMI_LEAD * TSUNAMI_WIDTH), 1);
+  }
+
+  /** Crest position (z) of the running tsunami. */
+  private tsunamiFront(): number {
+    const t = this.tsunami!;
+    return WORLD_SIZE + TSUNAMI_LEAD * TSUNAMI_WIDTH - t.speed * (this.simTime - t.start);
   }
 
   /** Depth of the sea at the open boundary (for the wave dispersion relation). */
@@ -148,6 +176,9 @@ export class Simulation {
     const f = new Float32Array(this.paramData);
     u[0] = this.n;
     u[1] = this.frame;
+    if (this.tsunami && this.tsunamiFront() < WORLD_SIZE - 0.8 - TSUNAMI_LEAD * TSUNAMI_WIDTH) this.tsunami = null;
+    f[2] = this.tsunami ? this.tsunamiFront() : 0;
+    f[3] = this.tsunami ? this.tsunami.amp : 0;
     f[4] = this.dx;
     f[5] = dt;
     f[6] = this.simTime;
@@ -199,8 +230,8 @@ export class Simulation {
     };
     for (let s = 0; s < steps; s++) {
       this.simTime += dt;
-      if (!settings.tidePaused) this.tideTime += dt * settings.tideSpeed;
-      this.seaLevel = tideLevel(this.tideTime);
+      if (!settings.tidePaused) this.tidePhase += (dt * settings.tideSpeed) / (settings.tidePeriodMin * 60);
+      this.seaLevel = tideLevel(this.tidePhase);
       this.writeParams(s, dt);
       const g = this.groups[s];
       run(p.flux, g[0]);

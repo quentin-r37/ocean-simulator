@@ -43,7 +43,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let g = ground[i];
     let H = g.x + g.y;
     let p = vec2f((f32(x) + 0.5) * P.dx, (f32(y) + 0.5) * P.dx);
-    let tgt = max(P.seaLevel + waveEta(p, P.waveTime, P.waveAmp, P.wavePeriod, P.boundaryDepth) - H, 0.0);
+    let eta = waveEta(p, P.waveTime, P.waveAmp, P.wavePeriod, P.boundaryDepth) + tsunamiEta(p.y, P.tsunamiFront, P.tsunamiAmp);
+    let tgt = max(P.seaLevel + eta - H, 0.0);
     d2 = mix(d2, tgt, clamp(s * s * P.dt * 40.0, 0.0, 1.0));
     v *= 1.0 - clamp(s * s * P.dt * 10.0, 0.0, 1.0);
   }

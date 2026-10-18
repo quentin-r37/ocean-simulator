@@ -5,6 +5,45 @@
 @group(0) @binding(3) var<storage, read_write> water: array<vec4f>;
 @group(0) @binding(4) var<storage, read_write> aux: array<vec4f>; // in place (own cell only)
 
+// Surf attacking a structure (castle, dune scarp) standing above the water's edge in direction
+// `dir`. The water is looked for up to UNDERMINE cells away: the column facing it is hit in full,
+// the ones behind less and less, as the soaked, scoured base undermines them. So a castle at the
+// water's edge slumps in slices (and loses height) instead of being nibbled one column at a time.
+// Water runs up any debris apron (run-up ≈ v²/2g). Returns (wetted height, wetted height × surf
+// speed²) with that fall-off: the structure soaks up water and the surf (pore pressure, backwash,
+// flow along the face: ∝ v²) breaks its packing.
+const UNDERMINE: i32 = 9;
+fn faceAttack(x: i32, y: i32, dir: vec2i, H: f32) -> vec2f {
+  var toeH = H;
+  var reach = -1e9;
+  var speed = 0.0;
+  var first = 0;
+  for (var k = 1; k <= UNDERMINE + 2; k++) {
+    if (first > 0 && k > first + 2) { break; }
+    let c = cidx(x + dir.x * k, y + dir.y * k);
+    let gs = groundIn[c];
+    let Hs = gs.x + gs.y;
+    let w = water[c];
+    if (first == 0) { toeH = min(toeH, Hs); }
+    if (w.x > 0.004) {
+      if (first == 0) {
+        if (k > UNDERMINE) { break; }
+        first = k;
+      }
+      let v = length(w.zw);
+      reach = max(reach, Hs + w.x + v * v / (2.0 * P.g));
+      speed = max(speed, v);
+    }
+  }
+  let face = H - toeH;
+  // Columns behind the face only count against a real wall, not the gentle slope of the beach.
+  if (first == 0 || face < select(0.06, 0.02, first == 1)) { return vec2f(0.0); }
+  let reachIn = f32(first - 1) * length(vec2f(dir));
+  let contact = clamp(reach - toeH, 0.0, face) * max(1.0 - reachIn / f32(UNDERMINE), 0.0);
+  let surf = 0.8 + speed;
+  return vec2f(contact, contact * surf * surf);
+}
+
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3u) {
   let n = i32(P.n);
@@ -81,6 +120,19 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (Hn < P.seaLevel - 0.004) {
     let surf = Hn + d;
     if (surf < P.seaLevel) { d += (P.seaLevel - surf) * min(P.seepK * P.dt, 1.0); }
+  }
+
+  // --- Waves against the faces of steep columns: soaked and battered, the packing goes, the
+  // cohesion with it, and the column slumps into the water (castles melt from the base). ---
+  var atk = vec2f(0.0);
+  for (var a = 0; a < 8; a++) {
+    let dirs = array<vec2i, 8>(vec2i(-1, 0), vec2i(1, 0), vec2i(0, -1), vec2i(0, 1),
+                               vec2i(-1, -1), vec2i(1, -1), vec2i(-1, 1), vec2i(1, 1));
+    atk += faceAttack(x, y, dirs[a], Hn);
+  }
+  if (atk.x > 0.0) {
+    M = min(1.0, M + 15.0 * atk.x * P.dt);
+    C = max(C - 25.0 * P.erosionK * atk.y * P.dt, 0.0);
   }
 
   // Saturated sand slowly loses its packing (liquefaction).

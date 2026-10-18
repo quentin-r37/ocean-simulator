@@ -9,9 +9,9 @@ import { DECOR, DecorSet } from '../world/decor';
 import pickWgsl from './shaders/pick.wgsl?raw';
 import toolsWgsl from './shaders/tools.wgsl?raw';
 
-export type ToolKind = 'shovel' | 'bucket' | 'crenel' | 'wall' | 'trowel' | 'decor';
+export type ToolKind = 'shovel' | 'bucket' | 'crenel' | 'wall' | 'trowel' | 'decor' | 'giant';
 
-export const TOOL_ORDER: ToolKind[] = ['shovel', 'bucket', 'crenel', 'wall', 'trowel', 'decor'];
+export const TOOL_ORDER: ToolKind[] = ['shovel', 'bucket', 'crenel', 'wall', 'trowel', 'decor', 'giant'];
 
 export enum Mode {
   None = 0,
@@ -28,7 +28,7 @@ export enum Mode {
 
 const HIT_OFFSET = 0;
 const INV_OFFSET = 256;
-const MOLD_TYPE: Record<MoldKind, number> = { bucket: 0, crenel: 1, wall: 2 };
+const MOLD_TYPE: Record<MoldKind, number> = { bucket: 0, crenel: 1, wall: 2, giant: 3 };
 
 export interface Inventory {
   shovelSand: number;
@@ -52,7 +52,7 @@ export interface Hit {
 
 export type ToolEvent = 'flip' | 'decorAdd' | 'decorRemove';
 
-export const isMold = (t: ToolKind): t is MoldKind => t === 'bucket' || t === 'crenel' || t === 'wall';
+export const isMold = (t: ToolKind): t is MoldKind => t === 'bucket' || t === 'crenel' || t === 'wall' || t === 'giant';
 
 export class Tools {
   tool: ToolKind = 'shovel';
@@ -223,6 +223,8 @@ export class Tools {
         return 0.15;
       case 'decor':
         return 0;
+      case 'giant':
+        return toolSpec.giantFillTime;
       default:
         return toolSpec.fillTime;
     }
@@ -248,7 +250,8 @@ export class Tools {
     tf[4] = this.sim.dx;
     tf[5] = dt;
     tf[6] = this.sim.seaLevel;
-    tf[7] = this.mode === Mode.Fill ? toolSpec.fillRadius : this.cursorRadius(alt, shift);
+    const giant = this.tool === 'giant';
+    tf[7] = this.mode === Mode.Fill ? (giant ? toolSpec.giantFillRadius : toolSpec.fillRadius) : this.cursorRadius(alt, shift);
     tf[8] = toolSpec.shovelCap;
     tf[9] = mold.cap;
     tf[10] = mold.rBase;
@@ -261,8 +264,10 @@ export class Tools {
     tf[17] = this.moldAngle;
     tf[18] = this.flattenTarget;
     tf[19] = toolSpec.shovelCap / toolSpec.digTime;
-    tf[20] = mold.cap / toolSpec.fillTime;
+    tf[20] = mold.cap / (giant ? toolSpec.giantFillTime : toolSpec.fillTime);
     tf[21] = TOOL_SCALE;
+    // Cells per thread side of the workgroup window: 16×8 = 128 cells, 16×16 = 256 for the giant bucket.
+    tf[22] = giant ? 16 : 8;
     this.device.queue.writeBuffer(this.toolU, 0, this.toolData);
 
     const pass = encoder.beginComputePass({ label: 'tools' });

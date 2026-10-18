@@ -10,12 +10,17 @@ import { Hud } from './ui/hud';
 import { Particles } from './render/particles';
 import { Sfx } from './audio/sfx';
 import { DECOR, DecorSet } from './world/decor';
+import { CLASSIC_LEVEL, setLevel } from './sim/level';
+import { generateLevel, urlSeed } from './sim/levelGen';
+import { AmbienceBlend, AMBIENCES } from './world/ambience';
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('gfx') as HTMLCanvasElement;
   const gpu = await initGpu(canvas);
   const { device } = gpu;
 
+  const seed0 = urlSeed();
+  if (seed0) setLevel(generateLevel(seed0));
   const sim = new Simulation(device, gridSize());
   const decor = new DecorSet();
   decor.reset(sim.seaLevel);
@@ -33,12 +38,31 @@ async function main(): Promise<void> {
     tools.resetInventory();
   };
   const resize = () => renderer.resize(canvas.clientWidth, canvas.clientHeight);
-  const hud = new Hud(tools, reset, resize);
+  const ambience = new AmbienceBlend();
+  const world = {
+    ambience,
+    state: { seed: seed0 ?? 0, randomAmbience: false },
+    loadSeed: (seed: number) => {
+      world.state.seed = seed;
+      setLevel(seed > 0 ? generateLevel(seed) : CLASSIC_LEVEL);
+      reset();
+      const url = new URL(location.href);
+      if (seed > 0) url.searchParams.set('seed', String(seed));
+      else url.searchParams.delete('seed');
+      history.replaceState(null, '', url);
+    },
+    randomBeach: () => {
+      world.loadSeed(1 + Math.floor(Math.random() * 99999));
+      if (world.state.randomAmbience) ambience.apply(Math.floor(Math.random() * AMBIENCES.length));
+    },
+    tsunami: () => sim.triggerTsunami(settings.tsunamiAmp),
+  };
+  const hud = new Hud(tools, world, reset, resize);
   window.addEventListener('resize', resize);
   resize();
 
   // Debug/automation hook.
-  const debug = { sim, tools, camera, settings, renderer, decor, paused: false };
+  const debug = { sim, tools, camera, settings, renderer, decor, world, paused: false };
   (window as unknown as { sandbox: typeof debug }).sandbox = debug;
 
   let last = performance.now();
@@ -57,6 +81,10 @@ async function main(): Promise<void> {
     if (input.hit('-') || input.hit('Minus') || input.hit('NumpadSubtract') || input.hit('BracketLeft'))
       settings.tideSpeed = settings.tideSpeed > 1 ? settings.tideSpeed / 2 : 0.5;
     if (input.hit('KeyR')) reset();
+    if (input.hit('KeyN')) world.randomBeach();
+    if (input.hit('KeyB')) ambience.next();
+    if (input.hit('KeyY')) world.tsunami();
+    ambience.update(dt);
     if (input.hit('KeyH')) {
       const help = document.getElementById('help') as HTMLDetailsElement;
       help.open = !help.open;

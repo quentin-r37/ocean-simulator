@@ -10,6 +10,13 @@ fn waveComp(p: vec2f, t: f32, a: f32, period: f32, ang: f32, c: f32, ph: f32) ->
   return a * (sin(th) - 0.18 * cos(2.0 * th));
 }
 
+// Tsunami: a long solitary hump (sech² profile) whose crest is at z = front, travelling towards -z.
+const TSUNAMI_WIDTH: f32 = 8.0;
+fn tsunamiEta(z: f32, front: f32, amp: f32) -> f32 {
+  let c = cosh(clamp((z - front) / TSUNAMI_WIDTH, -10.0, 10.0));
+  return amp / (c * c);
+}
+
 fn waveEta(p: vec2f, t: f32, amp: f32, period: f32, depth: f32) -> f32 {
   let c = sqrt(9.81 * max(depth, 0.25));
   // Wave groups: sets of bigger waves every few periods.

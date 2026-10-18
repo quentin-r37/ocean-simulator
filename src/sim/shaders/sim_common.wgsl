@@ -1,5 +1,5 @@
 struct Params {
-  n: u32, frame: u32, _p0: u32, _p1: u32,
+  n: u32, frame: u32, tsunamiFront: f32, tsunamiAmp: f32,
   dx: f32, dt: f32, time: f32, seaLevel: f32,
   g: f32, waveAmp: f32, wavePeriod: f32, boundaryDepth: f32,
   spongeCells: f32, friction: f32, viscosity: f32, erosionK: f32,

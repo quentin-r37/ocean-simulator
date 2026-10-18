@@ -24,7 +24,7 @@ import postWgsl from './shaders/post.wgsl?raw';
 const HDR: GPUTextureFormat = 'rgba16float';
 const DEPTH: GPUTextureFormat = 'depth32float';
 const SHADOW_SIZE = 4096;
-const CAM_BYTES = 320;
+const CAM_BYTES = 336;
 const SKY_W = 512;
 const SKY_H = 256;
 const MAX_OBJECTS = 72; // tools + their contents + sand particles
@@ -407,15 +407,16 @@ export class Renderer {
     f.set([settings.waveAmp, settings.wavePeriod, info.boundaryDepth, settings.showMoisture ? 1 : 0], 72);
     const dbg = (window as unknown as { waterDebug?: number }).waterDebug ?? 0;
     f.set([info.waveTime, c.water ? 1 : 0, dbg, c.wallHalfLen], 76);
+    f.set([settings.wind, settings.overcast, 0, 0], 80);
     this.device.queue.writeBuffer(this.camBuf[pass], 0, this.camData);
   }
 
   private bakeSky(encoder: GPUCommandEncoder): void {
     const sun = this.sunDirection();
-    const key = sun.map((x) => x.toFixed(4)).join(',');
+    const key = [...sun, settings.overcast].map((x) => x.toFixed(4)).join(',');
     if (key === this.lastSunKey) return;
     this.lastSunKey = key;
-    this.device.queue.writeBuffer(this.skyU, 0, new Float32Array([...sun, 0, 0, 0, 0, 0]));
+    this.device.queue.writeBuffer(this.skyU, 0, new Float32Array([...sun, 0, settings.overcast, 0, 0, 0]));
     const pass = encoder.beginComputePass({ label: 'sky' });
     pass.setPipeline(this.skyBakePipe);
     pass.setBindGroup(0, this.skyBakeGroup);

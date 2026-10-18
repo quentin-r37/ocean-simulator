@@ -139,7 +139,7 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
 
   // ----- Normal -----
   let calm = smoothstep(0.0, 0.08, depthCol) * (1.0 - smoothstep(30.0, 400.0, dist) * 0.7);
-  let ds = detailSlope(wp.xz, t, dist) * calm;
+  let ds = detailSlope(wp.xz, t, dist) * calm * (0.6 + 0.4 * cam.env.x);
   var n = normalize(normalize(in.nrm) + vec3f(-ds.x, 0.0, -ds.y));
   if (dot(n, V) < 0.02) { n = normalize(n + V * (0.02 - dot(n, V))); }
 

@@ -2,7 +2,8 @@ import type { MeshData } from '../render/meshBuilder';
 import {
   bottleMesh, bushMesh, buoyMesh, coralMesh, flagMesh, grassMesh, pierMesh, rockMesh, seaweedMesh, shellMesh, starfishMesh,
 } from '../render/decorMeshes';
-import { baseHeight, initialHeight, ROCKS } from '../sim/terrainInit';
+import { baseHeight, initialHeight } from '../sim/terrainInit';
+import { BOULDER_VARIANTS, CLASSIC_LEVEL, level } from '../sim/level';
 import { WORLD_SIZE } from '../sim/params';
 import { fbm, rng } from './noise';
 
@@ -41,7 +42,7 @@ export const DECOR: DecorKind[] = [
   { id: 'bush', name: 'Buisson', icon: '🌳', meshes: variants(bushMesh, 3), yMode: YMode.Ground, sway: 0.12, scale: [1.6, 2.6], placeable: true },
   { id: 'bottle', name: 'Bouteille', icon: '🍾', meshes: [bottleMesh()], yMode: YMode.Float, sway: 0, scale: [2.2, 2.6], placeable: true },
   { id: 'buoy', name: 'Bouée', icon: '🔴', meshes: [buoyMesh()], yMode: YMode.Float, sway: 0, scale: [1.6, 1.8], placeable: true },
-  { id: 'boulder', name: 'Gros rocher', icon: '', meshes: ROCKS.map((r) => rockMesh(r.seed)), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
+  { id: 'boulder', name: 'Gros rocher', icon: '', meshes: variants(rockMesh, BOULDER_VARIANTS), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
   { id: 'pier', name: 'Ponton', icon: '', meshes: [pierMesh()], yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
 ];
 
@@ -123,7 +124,8 @@ export class DecorSet {
 
 function generateDecor(seaLevel: number): DecorInstance[] {
   const out: DecorInstance[] = [];
-  const r = rng(12345);
+  const r = rng(12345 + level.seed);
+  const rocks = level.rocks;
   const L = WORLD_SIZE;
   const push = (id: string, x: number, z: number, scaleMul = 1, extra: Partial<DecorInstance> = {}) => {
     const kind = kindIndex(id);
@@ -133,18 +135,19 @@ function generateDecor(seaLevel: number): DecorInstance[] {
     out.push({ kind, variant: Math.floor(r() * k.meshes.length), x, y: 0, z, rot: r() * Math.PI * 2, sx: s, sy: s, sz: s, seed, ...extra });
   };
   const nearRock = (x: number, z: number, pad: number) =>
-    ROCKS.some((rk) => Math.hypot((x - rk.x) / (rk.rx + pad), (z - rk.z) / (rk.rz + pad)) < 1);
+    rocks.some((rk) => Math.hypot((x - rk.x) / (rk.rx + pad), (z - rk.z) / (rk.rz + pad)) < 1);
 
   // Boulders (their footprint is baked into the bedrock).
-  ROCKS.forEach((rk, i) => {
+  rocks.forEach((rk) => {
     out.push({
-      kind: kindIndex('boulder'), variant: i, x: rk.x, y: baseHeight(rk.x, rk.z) - 0.17, z: rk.z,
+      kind: kindIndex('boulder'), variant: (rk.seed - 1) % BOULDER_VARIANTS, x: rk.x, y: baseHeight(rk.x, rk.z) - 0.17, z: rk.z,
       rot: rk.rot, sx: rk.rx * 1.07, sy: rk.h + 0.2, sz: rk.rz * 1.07, seed: r(),
     });
   });
 
-  // Pier from the sand bar into the lagoon.
-  out.push({ kind: kindIndex('pier'), variant: 0, x: 12.6, y: 0.36, z: 9.4, rot: Math.PI + 0.22, sx: 1, sy: 1, sz: 1, seed: 0.5 });
+  // Pier from the sand into the lagoon or the sea.
+  const pier = level.pier;
+  if (pier) out.push({ kind: kindIndex('pier'), variant: 0, x: pier.x, y: pier.y, z: pier.z, rot: pier.rot, sx: 1, sy: 1, sz: 1, seed: 0.5 });
 
   const tries = (n: number, f: (x: number, z: number) => void) => {
     for (let i = 0; i < n; i++) f(0.25 + r() * (L - 0.5), 0.25 + r() * (L - 0.5));
@@ -169,7 +172,7 @@ function generateDecor(seaLevel: number): DecorInstance[] {
     else if (depth > 0.15 && r() < 0.004) push('rock', x, z);
   });
   // Corals around the boulders standing in water.
-  for (const rk of ROCKS) {
+  for (const rk of rocks) {
     for (let i = 0; i < 10; i++) {
       const a = r() * Math.PI * 2;
       const x = rk.x + Math.cos(a) * (rk.rx + 0.15 + r() * 0.5);
@@ -186,7 +189,12 @@ function generateDecor(seaLevel: number): DecorInstance[] {
     else if (u < 0.036) push('starfish', x, z);
     else if (u < 0.05) push('rock', x, z, 0.6);
   });
-  push('bottle', 7.6, 14.8);
-  push('buoy', 13.6, 14.6);
+  if (level === CLASSIC_LEVEL) {
+    push('bottle', 7.6, 14.8);
+    push('buoy', 13.6, 14.6);
+  } else {
+    push('bottle', 1 + r() * (L - 2), 14.3 + r() * 0.6);
+    push('buoy', 1 + r() * (L - 2), 13.8 + r() * 1.0);
+  }
   return out;
 }

@@ -9,7 +9,8 @@ struct Camera {
   screen: vec4f,  // w, h, 1/w, 1/h
   grid: vec4f,    // n, dx, L, stride
   waves: vec4f,   // amplitude, period, boundary depth, moisture overlay
-  misc: vec4f,    // wave time, cursor kind, -, -
+  misc: vec4f,    // wave time, cursor kind, debug view, wall half length
+  env: vec4f,     // wind strength, overcast, -, -
 }
 
 struct SkyData {
