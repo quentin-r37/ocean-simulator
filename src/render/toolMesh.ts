@@ -1,6 +1,8 @@
 import { Builder, MeshData } from './meshBuilder';
 import { compose, mat4RotateX, mat4RotateY, mat4RotateZ, mat4Scale, mat4Translate, Mat4, Vec3, v3, clamp, smoothstep } from '../math';
-import { molds, MoldKind, MoldSpec, toolSpec } from '../sim/params';
+import { baseMolds, molds, MoldKind, MoldSpec, TOOL_SCALE, toolSpec } from '../sim/params';
+
+const S = TOOL_SCALE;
 import type { Tools } from '../tools/tools';
 import { Mode } from '../tools/tools';
 
@@ -171,9 +173,9 @@ export function toolMeshes(): Record<ToolMeshId, MeshData> {
   const box = new Builder();
   box.box([0, 0, 0], [1, 1, 1], [1, 1, 1]);
   return {
-    bucket: buildBucket(molds.bucket, RED, false),
-    crenel: buildBucket(molds.crenel, BLUE, true),
-    wall: buildWallMold(molds.wall),
+    bucket: buildBucket(baseMolds.bucket, RED, false),
+    crenel: buildBucket(baseMolds.crenel, BLUE, true),
+    wall: buildWallMold(baseMolds.wall),
     shovel: buildShovel(),
     trowel: buildTrowel(),
     disc: buildDisc(),
@@ -236,17 +238,17 @@ export class ToolAnimator {
     const inv = tools.inventory;
     const digging = tools.mode === Mode.Dig;
     const plunge = digging ? Math.max(0, Math.sin(this.digPhase)) : 0;
-    const pat = this.patBlend * Math.abs(Math.sin(this.digPhase)) * 0.05;
+    const pat = this.patBlend * Math.abs(Math.sin(this.digPhase)) * 0.05 * S;
     const elev = (55 - 15 * plunge - 30 * this.patBlend) * (Math.PI / 180);
     const roll = this.dumpBlend * 2.2 + this.patBlend * Math.PI;
     const model = compose(
-      mat4Translate(v3.add(this.pos, [0, 0.015 + pat - 0.08 * plunge, 0])),
+      mat4Translate(v3.add(this.pos, [0, (0.015 - 0.08 * plunge) * S + pat, 0])),
       mat4RotateY(this.yaw),
       mat4RotateX(-elev),
-      mat4Translate([0, 0, -0.1 * plunge]),
+      mat4Translate([0, 0, -0.1 * plunge * S]),
       mat4RotateZ(roll),
-      mat4Translate([0, this.patBlend * 0.05, 0]),
-      mat4Scale([1.7, 1.7, 1.7]),
+      mat4Translate([0, this.patBlend * 0.05 * S, 0]),
+      mat4Scale([1.7 * S, 1.7 * S, 1.7 * S]),
     );
     const items: DrawItem[] = [{ mesh: 'shovel', model, tint: [0, 0, 0, 0], params: [0.35, 0, 0, 0] }];
     const frac = clamp(inv.shovelSand / toolSpec.shovelCap, 0, 1);
@@ -265,18 +267,19 @@ export class ToolAnimator {
     const work = Math.abs(Math.sin(this.digPhase));
     const elev = (tools.mode === Mode.Flatten || tools.mode === Mode.Smooth ? 8 : 35) * (Math.PI / 180);
     const model = compose(
-      mat4Translate(v3.add(this.pos, [0, 0.01 + 0.02 * work, 0])),
+      mat4Translate(v3.add(this.pos, [0, (0.01 + 0.02 * work) * S, 0])),
       mat4RotateY(this.yaw),
       mat4RotateX(-elev),
-      mat4Translate([0, 0, -0.03 * work]),
-      mat4Scale([1.4, 1.4, 1.4]),
+      mat4Translate([0, 0, -0.03 * work * S]),
+      mat4Scale([1.4 * S, 1.4 * S, 1.4 * S]),
     );
     return [{ mesh: 'trowel', model, tint: [0, 0, 0, 0], params: [0.25, 0, 0, 0] }];
   }
 
   private mold(tools: Tools): DrawItem[] {
     const kind = tools.tool as MoldKind;
-    const spec = molds[kind];
+    const spec = baseMolds[kind];
+    const cap = molds[kind].cap;
     const inv = tools.inventory;
     const h = spec.height;
     const t = tools.flipAge;
@@ -304,8 +307,11 @@ export class ToolAnimator {
       lift = 0.03 - 0.06 * this.fillBlend + 0.32 * this.pourBlend;
       pivotOffset = [0, 0, 0.12 * this.pourBlend];
     }
+    // Animated in mould-local units (scale 1), then scaled to world size.
     const model = compose(
-      mat4Translate(v3.add(this.pos, [0, h / 2 + lift, 0])),
+      mat4Translate(this.pos),
+      mat4Scale([S, S, S]),
+      mat4Translate([0, h / 2 + lift, 0]),
       mat4RotateY(this.yaw),
       mat4Translate(pivotOffset),
       mat4RotateX(angle),
@@ -313,8 +319,8 @@ export class ToolAnimator {
     );
     const mesh: ToolMeshId = kind === 'bucket' ? 'bucket' : kind === 'crenel' ? 'crenel' : 'wall';
     const items: DrawItem[] = [{ mesh, model, tint: [0, 0, 0, 0], params: [0.3, 0, 0, 0] }];
-    const sandFrac = clamp(inv.bucketSand / spec.cap, 0, 1);
-    const waterFrac = clamp(inv.bucketWater / spec.cap, 0, 1);
+    const sandFrac = clamp(inv.bucketSand / cap, 0, 1);
+    const waterFrac = clamp(inv.bucketWater / cap, 0, 1);
     const frac = Math.max(sandFrac, waterFrac);
     if (frac > 0.01 && Math.abs(angle) < 0.6 && t >= 0.3) {
       const y = 0.006 + (h - 0.012) * frac;

@@ -77,6 +77,20 @@ fn causticPattern(p: vec2f, t: f32) -> f32 {
   return 0.5 * (causticLayer(p, t) + causticLayer(p * 1.37 + vec2f(3.1, 1.7), t * 1.13));
 }
 
+// Pebble/speckle layer on a plane. Returns (pebble coverage, pebble shade, speckle darkening).
+fn pebbles(p: vec2f) -> vec3f {
+  let pc = floor(p * 7.0);
+  let ph = hash32(pc);
+  var k = 0.0;
+  if (ph.z > 0.72) {
+    let ctr = (pc + 0.2 + ph.xy * 0.6) / 7.0;
+    let rad = 0.008 + 0.02 * fract(ph.z * 13.7);
+    k = 1.0 - smoothstep(rad * 0.75, rad, length(p - ctr));
+  }
+  let sp = hash12(floor(p * 45.0));
+  return vec3f(k, 0.8 + 0.5 * ph.x, select(0.0, 0.45, sp > 0.985));
+}
+
 @fragment
 fn fs_main(in: VOut) -> @location(0) vec4f {
   clipReflection(in.wp);
@@ -103,19 +117,13 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   var alb = vec3f(0.93, 0.80, 0.53);
   let mott = fbm(wp.xz * 0.9) * 0.6 + fbm(wp.xz * 6.0) * 0.4;
   alb *= 0.95 + 0.08 * mott;
-  // Pebbles: a few per square metre, 1-3 cm.
-  let pc = floor(wp.xz * 7.0);
-  let ph = hash32(pc);
-  if (ph.z > 0.72) {
-    let ctr = (pc + 0.2 + ph.xy * 0.6) / 7.0;
-    let rad = 0.008 + 0.02 * fract(ph.z * 13.7);
-    let dd = length(wp.xz - ctr);
-    let k = 1.0 - smoothstep(rad * 0.75, rad, dd);
-    alb = mix(alb, vec3f(0.11, 0.1, 0.09) * (0.8 + 0.5 * ph.x), k);
-  }
-  // Fine speckles.
-  let sp = hash12(floor(wp.xz * 45.0));
-  alb *= select(1.0, 0.55, sp > 0.985);
+  // Pebbles (a few per square metre, 1-3 cm) and fine speckles, projected triplanarly so they
+  // stay round on the steep walls of moulded towers instead of smearing into vertical streaks.
+  let tw = pow(abs(in.nrm), vec3f(4.0));
+  let tws = tw / (tw.x + tw.y + tw.z);
+  let pb = tws.x * pebbles(wp.zy) + tws.y * pebbles(wp.xz) + tws.z * pebbles(wp.xy + vec2f(31.0, 17.0));
+  alb = mix(alb, vec3f(0.11, 0.1, 0.09) * pb.y, pb.x);
+  alb *= 1.0 - pb.z;
   // Wet sand: darker, warmer.
   alb = mix(alb, alb * vec3f(0.62, 0.56, 0.47), wet);
   // Lagoon bed: tinted, with darker weed patches.

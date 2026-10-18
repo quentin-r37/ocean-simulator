@@ -1,4 +1,4 @@
-// Shovel & bucket. Runs as ONE workgroup over a 64×64-cell window centred on the aimed point,
+// Shovel & bucket. Runs as ONE workgroup over a 128×128-cell window centred on the aimed point,
 // so every transfer between the terrain and the tool inventory is exactly volume-conserving.
 struct ToolU {
   mode: u32, n: u32, frame: u32, moldType: u32,
@@ -6,7 +6,7 @@ struct ToolU {
   shovelCap: f32, fillCap: f32, rBase: f32, rTop: f32,
   moldH: f32, merlon: f32, halfLen: f32, halfWBase: f32,
   halfWTop: f32, moldAngle: f32, targetH: f32, digRate: f32,
-  fillRate: f32, _p0: f32, _p1: f32, _p2: f32,
+  fillRate: f32, scale: f32, _p1: f32, _p2: f32,
 }
 struct Inv {
   shovelSand: f32, shovelM: f32, bucketSand: f32, bucketM: f32,
@@ -27,7 +27,10 @@ const MODE_POUR: u32 = 6u;
 const MODE_CARVE: u32 = 7u;
 const MODE_SMOOTH: u32 = 8u;
 const MODE_FLATTEN: u32 = 9u;
-const WIN: i32 = 64;
+const WIN: i32 = 128;
+// Cells per thread side (WIN / 16) and per thread.
+const CPS: i32 = 8;
+const CPT: i32 = 64;
 const LAYER: f32 = 0.06;
 // The trowel keeps working when the shovel is full: its shavings may overfill it this much.
 const TROWEL_SPILL: f32 = 10.0;
@@ -61,9 +64,9 @@ fn wmax(li: u32, v: f32) -> f32 {
   return r;
 }
 
-// k-th cell (0..15) handled by this thread; returns (x, y) or (-1, -1) if outside the domain.
+// k-th cell (0..CPT-1) handled by this thread; returns (x, y) or (-1, -1) if outside the domain.
 fn cellK(k: i32) -> vec2i {
-  let c = origin + vec2i(lid2.x * 4 + k % 4, lid2.y * 4 + k / 4);
+  let c = origin + vec2i(lid2.x * CPS + k % CPS, lid2.y * CPS + k / CPS);
   let n = i32(U.n);
   if (c.x < 0 || c.y < 0 || c.x >= n || c.y >= n) { return vec2i(-1); }
   return c;
@@ -80,21 +83,21 @@ fn moistEq(above: f32) -> f32 { return select(0.8 * (1.0 - smoothstep(0.03, 0.9,
 // Removes up to `budget` m³ of sand (gaussian footprint of radius R), returns (m³ taken, Σ m³·moisture).
 fn takeSand(li: u32, R: f32, budget: f32) -> vec2f {
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { sw += gauss(dist(c), R); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = budget / (U.dx * U.dx);
   var tw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { tw += min(ground[idx(c)].y, b * gauss(dist(c), R) / SW); }
   }
   let TW = wsum(li, tw);
   let scale = select(0.0, min(1.0, b / TW), TW > 1e-9);
   var tm = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let i = idx(c);
@@ -118,20 +121,20 @@ fn takeSand(li: u32, R: f32, budget: f32) -> vec2f {
 // Removes up to `budget` m³ of water.
 fn takeWater(li: u32, R: f32, budget: f32) -> f32 {
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { sw += gauss(dist(c), R); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = budget / (U.dx * U.dx);
   var tw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { tw += min(water[idx(c)].x, b * gauss(dist(c), R) / SW); }
   }
   let TW = wsum(li, tw);
   let scale = select(0.0, min(1.0, b / TW), TW > 1e-9);
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let i = idx(c);
@@ -147,13 +150,13 @@ fn takeWater(li: u32, R: f32, budget: f32) -> f32 {
 // Adds `vol` m³ of loose sand with moisture `m` (gaussian footprint).
 fn depositSand(li: u32, R: f32, vol: f32, m: f32) {
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { sw += gauss(dist(c), R); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = vol / (U.dx * U.dx);
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let add = b * gauss(dist(c), R) / SW;
@@ -180,13 +183,13 @@ fn ringW(r: f32, R: f32) -> f32 {
 }
 fn depositRing(li: u32, R: f32, vol: f32, m: f32) {
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { sw += ringW(dist(c), R); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = vol / (U.dx * U.dx);
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let add = b * ringW(dist(c), R) / SW;
@@ -207,13 +210,13 @@ fn depositRing(li: u32, R: f32, vol: f32, m: f32) {
 
 fn addWater(li: u32, R: f32, vol: f32) {
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { sw += gauss(dist(c), R); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = vol / (U.dx * U.dx);
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let i = idx(c);
@@ -233,7 +236,7 @@ fn packable(m: f32) -> f32 {
 fn smoothSand(li: u32, R: f32, rate: f32, compact: f32) {
   var sh = 0.0;
   var sw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let w = gauss(dist(c), R);
@@ -248,7 +251,7 @@ fn smoothSand(li: u32, R: f32, rate: f32, compact: f32) {
   let g0 = gauss(0.0, R);
   var sa = 0.0;
   var sb = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let w = gauss(dist(c), R) / g0;
@@ -261,7 +264,7 @@ fn smoothSand(li: u32, R: f32, rate: f32, compact: f32) {
   let A = wsum(li, sa);
   let B = wsum(li, sb);
   let T = min(A, B) * clamp(rate * U.dt, 0.0, 0.5);
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let w = gauss(dist(c), R) / g0;
@@ -286,14 +289,14 @@ fn smoothSand(li: u32, R: f32, rate: f32, compact: f32) {
 fn carve(li: u32, R: f32, depthRate: f32, room: f32) -> vec2f {
   let g0 = gauss(0.0, R);
   var tw = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) { tw += min(ground[idx(c)].y, gauss(dist(c), R) / g0 * depthRate * U.dt); }
   }
   let TW = wsum(li, tw);
   let scale = select(0.0, min(1.0, room / (U.dx * U.dx) / TW), TW > 1e-9);
   var tm = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let i = idx(c);
@@ -320,7 +323,7 @@ fn flatten(li: u32, R: f32, goal: f32, rate: f32, inSand: f32, inM: f32) -> vec2
   let g0 = gauss(0.0, R);
   var sr = 0.0;
   var sn = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let w = gauss(dist(c), R) / g0;
@@ -341,7 +344,7 @@ fn flatten(li: u32, R: f32, goal: f32, rate: f32, inSand: f32, inM: f32) -> vec2
     remScale = clamp(((cap - inSand) / a2 + filled) / RM, 0.0, 1.0);
   }
   var tm = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let w = gauss(dist(c), R) / g0;
@@ -382,16 +385,16 @@ fn moldShape(c: vec2i) -> vec3f {
     let v = -d.x * sa + d.y * ca;
     if (abs(u) > U.halfLen || abs(v) > U.halfWBase) { return vec3f(0.0); }
     let tv = select(clamp((U.halfWBase - abs(v)) / max(U.halfWBase - U.halfWTop, 1e-4), 0.0, 1.0), 1.0, abs(v) <= U.halfWTop);
-    let tu = clamp((U.halfLen - abs(u)) / 0.035, 0.0, 1.0);
+    let tu = clamp((U.halfLen - abs(u)) / (0.035 * U.scale), 0.0, 1.0);
     let shape = min(tv, tu);
-    let m = select(0.0, 1.0, abs(v) <= U.halfWTop && fract(u / 0.16 + 0.25) < 0.5 && abs(u) < U.halfLen - 0.025);
+    let m = select(0.0, 1.0, abs(v) <= U.halfWTop && fract(u / (0.16 * U.scale) + 0.25) < 0.5 && abs(u) < U.halfLen - 0.025 * U.scale);
     return vec3f(1.0, shape, m);
   }
   let r = length(d);
   if (r > U.rBase) { return vec3f(0.0); }
   let shape = select(clamp((U.rBase - r) / (U.rBase - U.rTop), 0.0, 1.0), 1.0, r <= U.rTop);
   var m = 0.0;
-  if (U.moldType == 1u && r <= U.rTop && r >= U.rTop - 0.08) {
+  if (U.moldType == 1u && r <= U.rTop && r >= U.rTop - 0.08 * U.scale) {
     let a = atan2(d.y, d.x);
     if (fract(a / 6.2831853 * 6.0) < 0.5) { m = 1.0; }
   }
@@ -401,7 +404,7 @@ fn moldShape(c: vec2i) -> vec3f {
 // Turns the mould over: a packed body (+ merlons) resting on the highest point of its footprint.
 fn flip(li: u32, gate: f32) {
   var hm = -1e9;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0 && moldShape(c).x > 0.0) {
       let g = ground[idx(c)];
@@ -412,7 +415,7 @@ fn flip(li: u32, gate: f32) {
   var gsum = 0.0;
   var ssum = 0.0;
   var msum = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let ms = moldShape(c);
@@ -445,7 +448,7 @@ fn flip(li: u32, gate: f32) {
   }
   let m = inv.bucketM;
   var used = 0.0;
-  for (var k = 0; k < 16; k++) {
+  for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
       let ms = moldShape(c);
@@ -528,11 +531,11 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
   } else if (U.mode == MODE_POUR) {
     // A full bucket empties in under a second (same pace as filling it).
     let vol = min(I.bucketWater, U.fillRate * 0.6 * U.dt) * valid;
-    addWater(li, 0.15, vol);
+    addWater(li, 0.15 * U.scale, vol);
     if (li == 0u) { inv.bucketWater = max(I.bucketWater - vol, 0.0); }
   } else if (U.mode == MODE_CARVE) {
     let room = max(U.shovelCap * TROWEL_SPILL - I.shovelSand, 0.0);
-    let r = carve(li, U.radius, 0.9, room * valid);
+    let r = carve(li, U.radius, 0.9 * U.scale, room * valid);
     if (li == 0u && r.x > 0.0) {
       let total = I.shovelSand + r.x;
       inv.shovelM = (I.shovelM * I.shovelSand + r.y) / total;

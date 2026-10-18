@@ -38,7 +38,7 @@ Un clic bref, ou un tap sur le trackpad, fait un geste complet : une pelletée, 
 - **Eau** : modèle d'eau peu profonde à « tuyaux virtuels ». La conductance dépend de la profondeur, si bien que les vagues avancent à √(g·h), ralentissent et se raidissent à l'approche du rivage. Une zone de génération et d'absorption de houle borde le large. La marée est sinusoïdale.
 - **Sable** : une colonne par cellule, décrite par le socle, l'épaisseur de sable, l'humidité et la compaction. Le sable s'éboule au-delà de l'angle de repos, qui dépend de l'humidité et du tassement :
   - sec : environ 34° ;
-  - humide : jusqu'à 85° s'il est tassé, grâce aux ponts capillaires ;
+  - humide : jusqu'à 85° s'il est tassé, grâce aux ponts capillaires, et la cohésion lui permet en plus de tenir une paroi verticale (jusqu'à 1,2 m une fois bien tassé) : les tours démoulées restent droites tant qu'elles ne sèchent pas ;
   - saturé : environ 17°, car le sable se liquéfie.
 - **Couplage sable–eau** :
   - érosion et dépôt selon la capacité de transport ;

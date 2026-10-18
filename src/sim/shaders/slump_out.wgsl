@@ -19,6 +19,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let g = ground[i];
   let H = g.x + g.y;
   let t = critTan(g.z, g.w, hash11(i));
+  let hc = cohHeight(g.z, g.w);
   var offs = OFFS;
   var ex: array<f32, 8>;
   var sum = 0.0;
@@ -29,7 +30,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (inside(x + o.x, y + o.y)) {
       let gn = ground[cidx(x + o.x, y + o.y)];
       let dist = select(P.dx, P.dx * 1.4142136, k >= 4);
-      e = max(0.0, H - (gn.x + gn.y) - t * dist);
+      e = max(0.0, H - (gn.x + gn.y) - t * dist - hc);
     }
     ex[k] = e;
     sum += e;

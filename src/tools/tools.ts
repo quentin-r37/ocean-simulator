@@ -2,7 +2,7 @@ import { computePipeline, createBuffer, Readback, STORAGE, UNIFORM } from '../gp
 import type { Input } from '../input/input';
 import type { IsoCamera } from '../camera/isoCamera';
 import type { Simulation } from '../sim/simulation';
-import { MoldKind, molds, toolSpec } from '../sim/params';
+import { MoldKind, molds, TOOL_SCALE, toolSpec } from '../sim/params';
 import type { Vec3 } from '../math';
 import { DECOR, DecorSet } from '../world/decor';
 
@@ -262,6 +262,7 @@ export class Tools {
     tf[18] = this.flattenTarget;
     tf[19] = toolSpec.shovelCap / toolSpec.digTime;
     tf[20] = mold.cap / toolSpec.fillTime;
+    tf[21] = TOOL_SCALE;
     this.device.queue.writeBuffer(this.toolU, 0, this.toolData);
 
     const pass = encoder.beginComputePass({ label: 'tools' });

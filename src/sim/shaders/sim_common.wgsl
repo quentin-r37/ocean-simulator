@@ -6,7 +6,7 @@ struct Params {
   depositK: f32, capacityK: f32, critVel: f32, evap: f32,
   moistDiff: f32, slumpRate: f32, dryTan: f32, wetTan: f32,
   compTan: f32, satTan: f32, seepK: f32, infilK: f32,
-  foamDecay: f32, waveTime: f32, _p2: f32, _p3: f32,
+  foamDecay: f32, waveTime: f32, cohH: f32, _p3: f32,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;
@@ -41,6 +41,13 @@ fn critTan(M: f32, C: f32, rnd: f32) -> f32 {
   let sat = smoothstep(0.9, 0.99, M);
   t = mix(t, P.satTan, sat * (1.0 - 0.6 * C));
   return t * (0.88 + 0.24 * rnd);
+}
+
+// Height of the vertical cliff that cohesion lets damp, packed sand hold before any slope
+// applies (moulded towers stand straight); it vanishes as the sand dries out or saturates.
+fn cohHeight(M: f32, C: f32) -> f32 {
+  let coh = smoothstep(0.04, 0.2, M) * (1.0 - smoothstep(0.88, 0.97, M));
+  return P.cohH * coh * C * C;
 }
 
 // Equilibrium moisture from the height above the water table (capillary fringe).

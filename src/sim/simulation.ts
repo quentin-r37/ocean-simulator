@@ -174,6 +174,7 @@ export class Simulation {
     f[27] = 0.02; // infiltration (m/s)
     f[28] = 0.35; // foam decay (1/s)
     f[29] = this.simTime;
+    f[30] = s.cohesion;
     this.device.queue.writeBuffer(this.params, slot * PARAM_STRIDE, this.paramData);
   }
 

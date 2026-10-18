@@ -32,6 +32,7 @@ export const settings = {
   wetAngle: 62,
   compactAngle: 85,
   satAngle: 17,
+  cohesion: 1.2, // hauteur de paroi verticale tenue par le sable humide tassé (m)
   slumpRate: 60,
   erosion: 1,
   // Simulation
@@ -60,21 +61,42 @@ export interface MoldSpec {
   halfWTop: number;
 }
 
-export const molds: Record<MoldKind, MoldSpec> = {
+/** Size multiplier applied to every tool and mould (`?tools=1|1.5|2`). */
+export const TOOL_SCALE = (() => {
+  const q = parseFloat(new URLSearchParams(location.search).get('tools') ?? '');
+  return q >= 0.5 && q <= 2 ? q : 1.5;
+})();
+
+/** Mould shapes at scale 1; the tool meshes are built from these and scaled by TOOL_SCALE. */
+export const baseMolds: Record<MoldKind, MoldSpec> = {
   // Toy-sized "giant" moulds so the castles read well at the diorama scale.
   bucket: { cap: 0.145, height: 0.56, merlon: 0, rBase: 0.306, rTop: 0.262, halfLen: 0, halfWBase: 0, halfWTop: 0 },
   crenel: { cap: 0.15, height: 0.525, merlon: 0.1, rBase: 0.306, rTop: 0.275, halfLen: 0, halfWBase: 0, halfWTop: 0 },
   wall: { cap: 0.1, height: 0.32, merlon: 0.075, rBase: 0, rTop: 0, halfLen: 0.5, halfWBase: 0.16, halfWTop: 0.13 },
 };
 
+function scaleMold(m: MoldSpec, s: number): MoldSpec {
+  return {
+    cap: m.cap * s ** 3, height: m.height * s, merlon: m.merlon * s, rBase: m.rBase * s, rTop: m.rTop * s,
+    halfLen: m.halfLen * s, halfWBase: m.halfWBase * s, halfWTop: m.halfWTop * s,
+  };
+}
+
+/** Mould shapes in world units (scaled). */
+export const molds: Record<MoldKind, MoldSpec> = {
+  bucket: scaleMold(baseMolds.bucket, TOOL_SCALE),
+  crenel: scaleMold(baseMolds.crenel, TOOL_SCALE),
+  wall: scaleMold(baseMolds.wall, TOOL_SCALE),
+};
+
 export const toolSpec = {
-  shovelCap: 0.04, // m³ (40 L)
-  shovelRadius: 0.3,
-  patRadius: 0.4,
-  fillRadius: 0.6,
-  trowelCarveRadius: 0.1,
-  trowelSmoothRadius: 0.22,
-  trowelFlattenRadius: 0.22,
+  shovelCap: 0.04 * TOOL_SCALE ** 3, // m³ (40 L at scale 1)
+  shovelRadius: 0.3 * TOOL_SCALE,
+  patRadius: 0.4 * TOOL_SCALE,
+  fillRadius: 0.6 * TOOL_SCALE,
+  trowelCarveRadius: 0.1 * TOOL_SCALE,
+  trowelSmoothRadius: 0.22 * TOOL_SCALE,
+  trowelFlattenRadius: 0.22 * TOOL_SCALE,
   /** Time (s) to fill the shovel / a mould while digging. */
   digTime: 0.45,
   fillTime: 0.45,

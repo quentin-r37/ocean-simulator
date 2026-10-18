@@ -53,6 +53,7 @@ export class Hud {
     sand.add(settings, 'wetAngle', 35, 80, 0.5).name('Angle humide (°)');
     sand.add(settings, 'compactAngle', 50, 88, 0.5).name('Angle tassé (°)');
     sand.add(settings, 'satAngle', 5, 30, 0.5).name('Angle saturé (°)');
+    sand.add(settings, 'cohesion', 0, 2, 0.05).name('Cohésion (m)');
     sand.add(settings, 'slumpRate', 5, 150, 1).name('Vitesse éboulement');
     sand.add(settings, 'erosion', 0, 3, 0.05).name('Érosion');
     const simF = gui.addFolder('Simulation');
