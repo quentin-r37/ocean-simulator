@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath d=%22M2 14h12l-2-6-2 2-2-5-2 5-2-2z%22 fill=%22%23d9b67a%22/%3E%3C/svg%3E" />
+    <title>Château de sable — WebGPU</title>
+    <style>
+      :root {
+        --panel: rgba(18, 24, 32, 0.62);
+        --text: #f3ede2;
+        --muted: #b9b2a6;
+        --accent: #f2b544;
+        --water: #3fb5d6;
+        --sand: #d9b67a;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0c1218;
+        color: var(--text);
+        font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      canvas#gfx {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+        touch-action: none;
+        cursor: crosshair;
+      }
+      .panel {
+        position: fixed;
+        background: var(--panel);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border-radius: 10px;
+        padding: 10px 12px;
+        user-select: none;
+      }
+      #hud { top: 12px; left: 12px; min-width: 250px; }
+      #hud h1 { font-size: 15px; margin: 0 0 8px; font-weight: 650; letter-spacing: 0.2px; }
+      .tools { display: flex; gap: 6px; margin-bottom: 8px; }
+      .tool {
+        flex: 1;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
+        padding: 6px 8px;
+        color: var(--muted);
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.04);
+        font: inherit;
+        text-align: left;
+      }
+      .tool.active { color: var(--text); border-color: var(--accent); background: rgba(242, 181, 68, 0.14); }
+      .tool kbd { margin-left: 4px; opacity: 0.6; font-size: 10px; }
+      .tool { text-align: center; padding: 5px 4px; font-size: 15px; }
+      .tool-name { font-weight: 600; margin: -2px 0 6px; }
+      .palette { display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; max-width: 260px; }
+      .palette.show { display: flex; }
+      .palette button {
+        border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 7px; background: rgba(255, 255, 255, 0.05);
+        font-size: 17px; width: 36px; height: 34px; cursor: pointer; padding: 0;
+      }
+      .palette button.active { border-color: var(--accent); background: rgba(242, 181, 68, 0.18); }
+      .row { display: flex; justify-content: space-between; gap: 10px; margin: 3px 0; }
+      .label { color: var(--muted); }
+      .bar { height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.12); overflow: hidden; margin: 2px 0 6px; }
+      .bar > div { height: 100%; width: 0%; transition: width 0.12s linear; }
+      .bar .sand { background: var(--sand); }
+      .bar .water { background: var(--water); }
+      kbd {
+        font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+        padding: 0 4px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+      }
+      #help { bottom: 12px; left: 12px; max-width: 560px; color: var(--muted); }
+      #help summary { cursor: pointer; color: var(--text); }
+      #help ul { margin: 6px 0 0; padding-left: 18px; }
+      #help li { margin: 2px 0; }
+      #error {
+        position: fixed;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        font-size: 16px;
+      }
+      #error.show { display: flex; }
+      #error div { max-width: 560px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="gfx"></canvas>
+
+    <div id="hud" class="panel">
+      <h1>Château de sable</h1>
+      <div class="tools">
+        <button class="tool" data-tool="shovel" title="Pelle">⛏️<kbd>1</kbd></button>
+        <button class="tool" data-tool="bucket" title="Seau">🪣<kbd>2</kbd></button>
+        <button class="tool" data-tool="crenel" title="Seau crénelé">🏰<kbd>3</kbd></button>
+        <button class="tool" data-tool="wall" title="Moule à muraille">🧱<kbd>4</kbd></button>
+        <button class="tool" data-tool="trowel" title="Truelle">🔺<kbd>5</kbd></button>
+        <button class="tool" data-tool="decor" title="Décor">🌴<kbd>6</kbd></button>
+      </div>
+      <div id="tool-name" class="tool-name">Pelle</div>
+      <div id="palette" class="palette"></div>
+      <div class="row"><span class="label">Pelle</span><span id="shovel-txt">vide</span></div>
+      <div class="bar"><div id="shovel-bar" class="sand"></div></div>
+      <div class="row"><span class="label">Seau</span><span id="bucket-txt">vide</span></div>
+      <div class="bar"><div id="bucket-bar" class="sand"></div></div>
+      <div class="row"><span class="label">Marée</span><span id="tide-txt">—</span></div>
+      <div class="row"><span class="label">Visée</span><span id="aim-txt">—</span></div>
+      <div class="row"><span class="label">Images/s</span><span id="fps-txt">—</span></div>
+    </div>
+
+    <details id="help" class="panel" open>
+      <summary>Commandes</summary>
+      <ul>
+        <li><b>Pelle</b> : clic creuser (pelle pleine : les déblais vont sur le bord du trou) · <kbd>Maj</kbd> vider · <kbd>Alt</kbd> tasser</li>
+        <li><b>Seaux / moule</b> : clic remplir (sable, ou eau en visant la mer) · <kbd>Maj</kbd>+clic retourner (ou verser l'eau) · <kbd>F</kbd> tourner la muraille</li>
+        <li><b>Truelle</b> : clic sculpter · <kbd>Maj</kbd> lisser · <kbd>Alt</kbd> aplanir à la hauteur visée (terrasses, escaliers)</li>
+        <li><b>Décor</b> : clic poser · <kbd>Maj</kbd>+clic retirer · <kbd>C</kbd> objet suivant</li>
+        <li><kbd>Clic droit</kbd>/<kbd>Clic milieu</kbd> glisser : déplacer · <kbd>Molette</kbd> zoom · <kbd>Q</kbd>/<kbd>E</kbd> (<kbd>A</kbd>/<kbd>E</kbd> en AZERTY) tourner · <kbd>ZQSD</kbd>/<kbd>WASD</kbd> se déplacer</li>
+        <li><kbd>T</kbd> pause marée · <kbd>+</kbd>/<kbd>-</kbd> vitesse · <kbd>R</kbd> réinitialiser · <kbd>H</kbd> aide</li>
+        <li>Astuce : le sable humide tient en murs verticaux, le sec s'éboule. Arrosez vos tours !</li>
+      </ul>
+    </details>
+
+    <div id="error"><div id="error-msg"></div></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
