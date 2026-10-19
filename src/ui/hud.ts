@@ -4,6 +4,7 @@ import type { Simulation } from '../sim/simulation';
 import { isMold, ToolKind, Tools } from '../tools/tools';
 import { DECOR } from '../world/decor';
 import { AmbienceBlend, AMBIENCES } from '../world/ambience';
+import { Music, TRACKS } from '../audio/music';
 
 /** Level / ambience controls provided by main. */
 export interface WorldControls {
@@ -34,7 +35,7 @@ export class Hud {
   private gui: GUI;
   private amb = { name: AMBIENCES[0].name };
 
-  constructor(private tools: Tools, private world: WorldControls, onReset: () => void, onScale: () => void) {
+  constructor(private tools: Tools, private world: WorldControls, music: Music, onReset: () => void, onScale: () => void) {
     document.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) => {
       b.addEventListener('click', () => tools.select(b.dataset.tool as ToolKind));
     });
@@ -74,6 +75,16 @@ export class Hud {
     tide.add(settings, 'tidePeriodMin', 2, 60, 1).name('Cycle (min)').listen();
     tide.add(settings, 'tideSpeed', 0, 32, 0.5).name('Vitesse').listen();
     tide.add(settings, 'tidePaused').name('Pause').listen();
+    const mus = gui.addFolder('Musique');
+    const names = TRACKS.map((t) => t.name);
+    mus.add(music.state, 'on').name('Activée (Maj+M)').onChange(() => music.apply()).listen();
+    mus
+      .add(music.state, 'track', names)
+      .name('Piste')
+      .onChange((n: string) => music.select(names.indexOf(n)))
+      .listen();
+    mus.add(music, 'next').name('⏭ Piste suivante (M)');
+    mus.add(music.state, 'volume', 0, 1, 0.01).name('Volume').onChange(() => music.apply());
     const sun = gui.addFolder('Soleil et météo');
     sun.add(settings, 'sunElevation', 2, 85, 0.5).name('Élévation (°)').listen();
     sun.add(settings, 'sunAzimuth', -180, 180, 1).name('Azimut (°)').listen();

@@ -9,6 +9,7 @@ import { ToolAnimator } from './render/toolMesh';
 import { Hud } from './ui/hud';
 import { Particles } from './render/particles';
 import { Sfx } from './audio/sfx';
+import { Music } from './audio/music';
 import { DECOR, DecorSet } from './world/decor';
 import { CLASSIC_LEVEL, setLevel } from './sim/level';
 import { generateLevel, urlSeed } from './sim/levelGen';
@@ -31,6 +32,7 @@ async function main(): Promise<void> {
   const animator = new ToolAnimator();
   const particles = new Particles(64);
   const sfx = new Sfx();
+  const music = new Music();
 
   const reset = () => {
     sim.reset();
@@ -57,7 +59,7 @@ async function main(): Promise<void> {
     },
     tsunami: () => sim.triggerTsunami(settings.tsunamiAmp),
   };
-  const hud = new Hud(tools, world, reset, resize);
+  const hud = new Hud(tools, world, music, reset, resize);
   window.addEventListener('resize', resize);
   resize();
 
@@ -84,6 +86,10 @@ async function main(): Promise<void> {
     if (input.hit('KeyN')) world.randomBeach();
     if (input.hit('KeyB')) ambience.next();
     if (input.hit('KeyY')) world.tsunami();
+    if (input.hit('KeyM')) {
+      if (input.shift) music.toggle();
+      else music.next();
+    }
     ambience.update(dt);
     if (input.hit('KeyH')) {
       const help = document.getElementById('help') as HTMLDetailsElement;
