@@ -135,9 +135,12 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
 
   // ----- Lighting -----
   let shadow = shadowAt(wp, in.nrm);
-  let nl = clamp((dot(n, Ld) + 0.15) / 1.15, 0.0, 1.0);
+  // Near-Lambert terminator (a wide wrap would smear the core shadow away).
+  let ndl = dot(n, Ld);
+  let nl = clamp((ndl + 0.04) / 1.04, 0.0, 1.0);
   let sun = sky.sun.rgb;
-  var col = alb / PI * (sun * nl * shadow + ambientIrr(sky, n) * (0.4 + 0.6 * ao) * 1.2);
+  let fill = ambientIrr(sky, n) * (0.4 + 0.6 * ao) * 1.2 * (1.0 - 0.7 * coreShadow(ndl));
+  var col = alb / PI * (sun * nl * shadow + fill) * (1.0 - 0.35 * turnShade(n, V));
 
   // Wet sheen in the swash zone.
   let pooled = smoothstep(-0.25, 0.35, fbm(wp.xz * 1.8 + vec2f(3.0, 1.0)));

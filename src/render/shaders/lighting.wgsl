@@ -26,6 +26,20 @@ fn shadowAt(wp: vec3f, nrm: vec3f) -> f32 {
   return s / 9.0;
 }
 
+// Core shadow: the darkest band of a form sits just past the terminator, where neither the sun
+// nor the bounce light from the sand reaches it; further round, the bounce lifts the shadow side
+// again. Returns the fraction of fill light lost there (0 on lit planes and on the far side).
+fn coreShadow(ndl: f32) -> f32 {
+  return (1.0 - smoothstep(-0.12, 0.1, ndl)) * smoothstep(-0.75, -0.2, ndl);
+}
+
+// Steep surfaces darken as they turn away from the eye (rough-surface falloff, as in Oren-Nayar),
+// so the lit side of a tower keeps a darker rim against the lit sand behind it.
+fn turnShade(n: vec3f, V: vec3f) -> f32 {
+  let steep = smoothstep(0.05, 0.35, 1.0 - n.y);
+  return steep * (1.0 - smoothstep(0.0, 0.6, dot(n, V)));
+}
+
 // The diorama has no aerial perspective (kept as a hook for shaders that call it).
 fn applyFog(col: vec3f, wp: vec3f) -> vec3f {
   return col;
