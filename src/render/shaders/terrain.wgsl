@@ -20,6 +20,104 @@ fn hAt(x: i32, y: i32) -> f32 {
   return g.x + g.y;
 }
 
+// 5×5 heights around the vertex being built (stride apart), indexed from -2 to 2.
+var<private> nb: array<f32, 25>;
+fn nbH(k: i32, j: i32) -> f32 { return nb[(j + 2) * 5 + k + 2]; }
+// Sobel gradient at a neighbour (|k|, |j| <= 1), in height per stride.
+fn nbGrad(k: i32, j: i32) -> vec2f {
+  let gx = (nbH(k + 1, j - 1) + 2.0 * nbH(k + 1, j) + nbH(k + 1, j + 1)) - (nbH(k - 1, j - 1) + 2.0 * nbH(k - 1, j) + nbH(k - 1, j + 1));
+  let gy = (nbH(k - 1, j + 1) + 2.0 * nbH(k, j + 1) + nbH(k + 1, j + 1)) - (nbH(k - 1, j - 1) + 2.0 * nbH(k, j - 1) + nbH(k + 1, j - 1));
+  return vec2f(gx, gy) / 8.0;
+}
+
+// Steep faces (moulded towers, walls) span only a cell or two, so drawn straight off the grid
+// they follow the cell staircase: jagged rim, zigzag creases down the sides. The cells on the
+// face hold exact samples of its profile, but the flat top and the foot are clamped and have
+// lost where the face starts. So a vertex at the top or the foot of its 3×3 slides along the
+// slope to where a line fitted through the unclamped heights of its 5×5 reaches its height:
+// a fresh round tower reads as a clean truncated cone. Face vertices and smooth terrain (whose
+// crests have no steep line to extrapolate) stay put. Returns the shift in world units.
+const CLAMP_EPS: f32 = 0.02; // m: closer than this to its local extreme, a height counts as clamped
+fn contourShift(H: f32, fs: f32) -> vec2f {
+  var lo3 = H;
+  var hi3 = H;
+  for (var j = -1; j <= 1; j++) {
+    for (var k = -1; k <= 1; k++) {
+      lo3 = min(lo3, nbH(k, j));
+      hi3 = max(hi3, nbH(k, j));
+    }
+  }
+  let clamped = 1.0 - smoothstep(0.0, CLAMP_EPS, min(hi3 - H, H - lo3));
+  if (clamped <= 0.0) { return vec2f(0.0); }
+  var lo = H;
+  var hi = H;
+  for (var j = -2; j <= 2; j++) {
+    for (var k = -2; k <= 2; k++) {
+      lo = min(lo, nbH(k, j));
+      hi = max(hi, nbH(k, j));
+    }
+  }
+  // Too little relief around for any slope steep enough to act on (most of the beach).
+  if (hi - lo < 0.8 * fs) { return vec2f(0.0); }
+  // Uphill direction from the gradient averaged over the 3×3 (a single cell's follows the staircase).
+  var gavg = vec2f(0.0);
+  for (var j = -1; j <= 1; j++) {
+    for (var k = -1; k <= 1; k++) { gavg += nbGrad(k, j) * f32((2 - abs(k)) * (2 - abs(j))); }
+  }
+  gavg /= 16.0;
+  let L = length(gavg);
+  if (L < 1e-6) { return vec2f(0.0); }
+  let dir = gavg / L;
+  // Weighted line h = hm + b (t - tm) along `dir` (t in strides), through the unclamped samples
+  // close to the vertex's own slope line; the averaged gradient is a weak prior on the slope.
+  // The slide stops short of the nearest unclamped neighbour on its way (none: no slide that
+  // way), so the flat ground around a foot is not dragged in and folded over it.
+  var sw = 0.0;
+  var st = 0.0;
+  var sh = 0.0;
+  var tUp = 0.0;
+  var tDown = 0.0;
+  for (var j = -2; j <= 2; j++) {
+    for (var k = -2; k <= 2; k++) {
+      let h = nbH(k, j);
+      let p = vec2f(f32(k), f32(j));
+      let u = dot(p, vec2f(-dir.y, dir.x));
+      let t = dot(p, dir);
+      let free = smoothstep(0.0, CLAMP_EPS, min(hi - h, h - lo));
+      let w = free * exp(-u * u);
+      sw += w;
+      st += w * t;
+      sh += w * h;
+      if (abs(k) <= 1 && abs(j) <= 1 && free > 0.25) {
+        if (t > 0.05) { tUp = select(t, min(tUp, t), tUp > 0.0); }
+        if (t < -0.05) { tDown = select(t, max(tDown, t), tDown < 0.0); }
+      }
+    }
+  }
+  if (sw < 1e-4) { return vec2f(0.0); }
+  let tm = st / sw;
+  let hm = sh / sw;
+  var num = 0.02 * L;
+  var den = 0.02;
+  for (var j = -2; j <= 2; j++) {
+    for (var k = -2; k <= 2; k++) {
+      let h = nbH(k, j);
+      let p = vec2f(f32(k), f32(j));
+      let u = dot(p, vec2f(-dir.y, dir.x));
+      let w = smoothstep(0.0, CLAMP_EPS, min(hi - h, h - lo)) * exp(-u * u);
+      let dt = dot(p, dir) - tm;
+      num += w * dt * (h - hm);
+      den += w * dt * dt;
+    }
+  }
+  let b = num / den;
+  let steep = smoothstep(0.8, 2.0, b / fs);
+  if (steep <= 0.0) { return vec2f(0.0); }
+  // (only 3/4 of the way there: that neighbour is rarely right on the slide line)
+  let t = clamp(tm + (H - hm) / b, 0.75 * tDown, 0.75 * tUp);
+  return dir * (t * fs * steep * clamped * smoothstep(0.0, 0.5, sw));
+}
+
 // Cell centres, except the outermost row/column which is stretched to the domain border.
 fn edgeCoord(g: i32, n: i32, dx: f32) -> f32 {
   if (g == 0) { return 0.0; }
@@ -42,7 +140,24 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) row: u32) ->
   let hr = hAt(gx + s, gy);
   let hb = hAt(gx, gy - s);
   let ht = hAt(gx, gy + s);
-  let nrm = normalize(vec3f(hl - hr, 2.0 * dx * f32(s), hb - ht));
+  var nrm = normalize(vec3f(hl - hr, 2.0 * dx * f32(s), hb - ht));
+
+  var shift = vec2f(0.0);
+  if (gx > 0 && gy > 0 && gx < n - 1 && gy < n - 1) {
+    for (var j = -2; j <= 2; j++) {
+      for (var k = -2; k <= 2; k++) { nb[(j + 2) * 5 + k + 2] = hAt(gx + k * s, gy + j * s); }
+    }
+    let fs = dx * f32(s);
+    shift = contourShift(H, fs);
+    // On steep faces, the normal's heading comes from the 3×3-averaged gradient (the fragment
+    // shader keeps it and takes the tilt from the triangle itself).
+    var gavg = vec2f(0.0);
+    for (var j = -1; j <= 1; j++) {
+      for (var k = -1; k <= 1; k++) { gavg += nbGrad(k, j) * f32((2 - abs(k)) * (2 - abs(j))); }
+    }
+    gavg /= 16.0 * fs;
+    nrm = normalize(mix(nrm, normalize(vec3f(-gavg.x, 1.0, -gavg.y)), smoothstep(0.8, 2.0, length(gavg))));
+  }
 
   // Cheap heightfield ambient occlusion: how much the surroundings rise above this point.
   var occ = 0.0;
@@ -57,7 +172,7 @@ fn vs_main(@builtin(vertex_index) vi: u32, @builtin(instance_index) row: u32) ->
   let ao = 1.0 - clamp(occ / 8.0, 0.0, 1.0) * 0.85;
 
   var o: VOut;
-  o.wp = vec3f(edgeCoord(gx, n, dx), H, edgeCoord(gy, n, dx));
+  o.wp = vec3f(edgeCoord(gx, n, dx) + shift.x, H, edgeCoord(gy, n, dx) + shift.y);
   o.pos = cam.viewProj * vec4f(o.wp, 1.0);
   o.nrm = nrm;
   o.mat = vec4f(g.z, g.w, water[i].x, ao);
@@ -93,6 +208,7 @@ fn pebbles(p: vec2f) -> vec3f {
 
 @fragment
 fn fs_main(in: VOut) -> @location(0) vec4f {
+  let facet = normalize(cross(dpdy(in.wp), dpdx(in.wp)));
   clipReflection(in.wp);
   let t = cam.camPos.w;
   let wp = in.wp;
@@ -108,6 +224,13 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
 
   // ----- Normal: geometry + soft ripples on the submerged bed -----
   var n = normalize(in.nrm);
+  // Around near-vertical faces, vertex normals smear the crease: the flat top and the ground at
+  // the foot darken. There the tilt comes from the triangle itself (crisp rim and foot), the
+  // heading from the smooth vertex normal (a round tower shades round, not in facets).
+  let fN = select(-facet, facet, dot(facet, n) >= 0.0);
+  let hd = select(fN.xz, n.xz, dot(n.xz, n.xz) > 1e-4);
+  let fS = vec3f(normalize(hd) * length(fN.xz), fN.y).xzy;
+  n = normalize(mix(n, select(fN, fS, fN.y < 0.9), 1.0 - smoothstep(0.35, 0.6, min(fN.y, n.y))));
   let flat = smoothstep(0.85, 0.98, n.y);
   let bedPh = dot(wp.xz, vec2f(0.3, 0.95)) * (6.2831 / 0.13) + fbm(wp.xz * 1.3) * 2.5;
   let pert = vec2f(0.3, 0.95) * cos(bedPh) * underwater * flat * 0.18;

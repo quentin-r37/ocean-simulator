@@ -459,7 +459,8 @@ fn flip(li: u32, gate: f32) {
         if (add > 0.0) {
           let wOld = min(g.y, LAYER);
           g.z = (g.z * wOld + m * add) / (wOld + add);
-          g.w = (g.w * wOld + add) / (wOld + add);
+          // The mould packs everything it holds, down to its thin outer lip.
+          g.w = 1.0;
           g.y += add;
           ground[i] = g;
           var w = water[i];
