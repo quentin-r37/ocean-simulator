@@ -31,6 +31,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   var c = a.xy * (1.0 - out);
   c += incoming(x - 1, y, 1u) + incoming(x + 1, y, 0u) + incoming(x, y - 1, 3u) + incoming(x, y + 1, 2u);
   let d = water[i].x;
-  let decay = P.foamDecay + select(0.0, 2.5, d < 0.004);
+  let decay = P.foamDecay + 2.5 * (1.0 - smoothstep(0.004, 0.01, d));
   auxOut[i] = vec4f(c.x, c.y * exp(-P.dt * decay), a.z, a.w);
 }

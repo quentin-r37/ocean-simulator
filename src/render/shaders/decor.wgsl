@@ -80,6 +80,16 @@ fn vs_main(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   return o;
 }
 
+// Triplanar value noise (blend weights `w`): value in x, gradient in yzw.
+fn triNoise(p: vec3f, w: vec3f) -> vec4f {
+  let a = vnoised(p.zy);
+  let b = vnoised(p.xz);
+  let c = vnoised(p.xy + vec2f(17.3, 5.1));
+  let v = w.x * a.x + w.y * b.x + w.z * c.x;
+  let g = w.x * vec3f(0.0, a.z, a.y) + w.y * vec3f(b.y, 0.0, b.z) + w.z * vec3f(c.y, c.z, 0.0);
+  return vec4f(v, g);
+}
+
 @fragment
 fn fs_main(in: VOut) -> @location(0) vec4f {
   clipReflection(in.wp);
@@ -90,26 +100,62 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   let sun = sky.sun.rgb;
   let shadow = shadowAt(in.wp, n);
   var alb = in.col;
-  var wet = 0.0;
+  var wet = 0.0; // wet sheen (only above the water: under it the surface does the reflecting)
+  var rough = 0.45;
   if (in.stone > 0.5) {
-    // Waterline on rocks: dark wet band up to the swash, green weed and barnacles just below
+    let wp = in.wp;
+    let w0 = pow(abs(n), vec3f(4.0));
+    let w = w0 / (w0.x + w0.y + w0.z);
+    // Fine detail fades out with distance so it does not shimmer.
+    let fade = 1.0 - smoothstep(3.0, 14.0, length(cam.camPos.xyz - wp));
+    // Weathered relief: a few octaves of triplanar noise bend the normal.
+    var g = vec3f(0.0);
+    var relief = 0.0;
+    var f = 4.0;
+    var amp = 1.0;
+    for (var i = 0; i < 4; i++) {
+      let s = triNoise(wp * f + f32(i) * 7.1, w);
+      relief += s.x * amp;
+      g += s.yzw * f * amp;
+      f *= 2.4;
+      amp *= mix(0.25, 0.42, fade);
+    }
+    n = normalize(n - 0.011 * (g - dot(g, n) * n));
+    alb *= 0.9 + 0.12 * relief;
+    // Granite grain: light and dark crystals.
+    let grain = triNoise(wp * 95.0, w).x;
+    alb *= 1.0 + 0.22 * clamp(grain * 2.0, -1.0, 1.0) * fade;
+    alb = mix(alb, alb * 0.45, smoothstep(0.55, 0.8, triNoise(wp * 140.0 + 3.0, w).x) * fade);
+    // Hairline cracks along the zero lines of a warped noise.
+    let cr = triNoise(wp * 2.2 + relief * 0.08, w).x;
+    alb *= 1.0 - 0.55 * (1.0 - smoothstep(0.0, 0.035, abs(cr))) * smoothstep(-0.2, 0.3, triNoise(wp * 1.3 + 11.0, w).x);
+
+    // Waterline: dark wet band up to the swash, green weed and barnacles just below
     // the surface, a dimmer greenish tint deeper down.
-    let h = in.wp.y - cam.sunDir.w;
-    let wob = fbm(in.wp.xz * 7.0 + in.wp.y * 3.0) * 0.06;
+    let h = wp.y - cam.sunDir.w;
+    let wob = triNoise(wp * 7.0, w).x * 0.05;
     let reach = 0.04 + cam.waves.x * 1.5;
-    wet = 1.0 - smoothstep(reach * 0.5, reach + 0.06, h + wob);
+    let damp = 1.0 - smoothstep(reach * 0.5, reach + 0.06, h + wob);
+    wet = damp * smoothstep(-0.03, 0.01, h);
     let weed = smoothstep(-0.3, -0.12, h + wob) * (1.0 - smoothstep(-0.02, 0.05, h + wob * 1.5));
     let deep = 1.0 - smoothstep(-0.4, -0.15, h);
-    alb = mix(alb, alb * vec3f(0.55, 0.52, 0.48), wet);
-    alb = mix(alb, vec3f(0.05, 0.075, 0.03), weed * 0.8 * smoothstep(-0.2, 0.3, vnoise(in.wp.xz * 18.0 + in.wp.y * 9.0)));
-    let barn = smoothstep(0.55, 0.75, vnoise(in.wp.xz * 70.0 + in.wp.y * 41.0)) * weed;
-    alb = mix(alb, vec3f(0.3, 0.29, 0.26), barn * 0.7);
+    alb = mix(alb, alb * vec3f(0.55, 0.52, 0.48), damp);
+    alb = mix(alb, vec3f(0.05, 0.075, 0.03), weed * 0.8 * smoothstep(-0.2, 0.3, triNoise(wp * 18.0, w).x));
+    let barn = smoothstep(0.55, 0.7, triNoise(wp * 70.0, w).x) * weed * fade;
+    alb = mix(alb, vec3f(0.3, 0.29, 0.26), barn * 0.5);
     alb = mix(alb, alb * vec3f(0.7, 0.85, 0.75), deep);
+
+    // A few small crusty lichen spots on the dry, sun-facing tops: orange and pale grey-green.
+    let lv = triNoise(wp * 7.0 + 5.0, w).x * 0.6 + triNoise(wp * 22.0, w).x * 0.4;
+    let lichen = smoothstep(0.42, 0.47, lv) * smoothstep(0.35, 0.75, n.y) * smoothstep(0.0, 0.12, h - reach);
+    let lcol = select(vec3f(0.22, 0.22, 0.18), vec3f(0.26, 0.15, 0.05), triNoise(wp * 0.9 + 2.0, w).x > 0.0);
+    alb = mix(alb, lcol * (0.8 + 0.4 * (grain * 0.5 + 0.5)), lichen * 0.7);
+    rough = 0.8;
   }
   // Wrapped diffuse keeps the stylised look soft.
   let nl = clamp((dot(n, Ld) + 0.25) / 1.25, 0.0, 1.0);
   var col = alb / PI * (sun * nl * shadow + ambientIrr(sky, n) * 1.15);
-  col += sun * ggx(n, V, Ld, mix(0.45, 0.2, wet)) * max(dot(n, Ld), 0.0) * shadow * mix(0.04, 0.25, wet);
+  col += sun * ggx(n, V, Ld, mix(rough, 0.2, wet)) * max(dot(n, Ld), 0.0) * shadow * mix(0.04, 0.25, wet);
   if (in.preview > 0.5) {
     col = mix(col, vec3f(1.2, 1.1, 0.8), 0.25 + 0.15 * sin(cam.camPos.w * 6.0));
   }

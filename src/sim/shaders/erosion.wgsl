@@ -114,7 +114,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // --- Infiltration of perched water, drainage of pools into the water table, seepage from it ---
   let surf = Hn + d;
   if (d > 0.0 && Hn > P.waterTable + 0.005) {
-    let inf = min(d, P.infilK * (1.03 - M) * P.dt);
+    // Well above the water table soaked sand still drains by gravity and keeps taking water;
+    // only near the table does saturation shut infiltration off.
+    let take = mix(1.03 - M, max(1.03 - M, 0.5), smoothstep(0.02, 0.15, above));
+    let inf = min(d, P.infilK * take * P.dt);
     d -= inf;
     M = min(1.0, M + inf * 25.0);
   } else if (surf > P.seaLevel) {
@@ -149,7 +152,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let froude = speed / sqrt(9.81 * max(d, 0.005));
   let gen = 0.5 * smoothstep(1.3, 2.6, speed) * smoothstep(0.004, 0.04, d)
           + 0.9 * smoothstep(0.35, 0.8, froude) * smoothstep(0.004, 0.02, d) * (1.0 - smoothstep(0.25, 0.6, d))
-          + 0.3 * smoothstep(0.5, 1.6, speed) * smoothstep(0.002, 0.01, d) * (1.0 - smoothstep(0.03, 0.2, d));
+          + 0.3 * smoothstep(0.5, 1.6, speed) * smoothstep(0.006, 0.015, d) * (1.0 - smoothstep(0.03, 0.2, d));
   foam = clamp(foam + gen * P.dt * 4.0, 0.0, 1.0);
 
   groundOut[i] = vec4f(g.x, max(S, 0.0), M, C);

@@ -31,7 +31,7 @@ export function rockMesh(seed: number): MeshData {
     planes.push({ n: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)], o: 0.84 + r() * 0.1 });
   }
   const shape = (p: Vec3): Vec3 => {
-    let d = 1.06 + 0.14 * fbm(p[0] * 1.1 + off, p[2] * 1.1 + p[1] * 0.8, seed, 2);
+    let d = 1.06 + 0.14 * fbm(p[0] * 1.1 + off, p[2] * 1.1 + p[1] * 0.8, seed, 2) + 0.04 * fbm(p[0] * 3.5, p[2] * 3.5 + p[1] * 2.5, seed + 5, 2);
     for (const pl of planes) {
       const c = v3.dot(p, pl.n);
       if (c > 1e-3) d = smin(d, pl.o / c, 0.14);
@@ -41,10 +41,10 @@ export function rockMesh(seed: number): MeshData {
     const y = Math.max(q[1], -0.25);
     return [q[0], (y + 0.25) / 1.3, q[2]];
   };
-  // Weathered granite: warm grey, tilted strata, paler sun-bleached tops with lichen spots.
+  // Weathered granite: warm grey, tilted strata, paler sun-bleached tops (fine grain, cracks and
+  // lichen are added per pixel in decor.wgsl).
   const dark: Vec3 = [0.075, 0.068, 0.062];
   const warm: Vec3 = [0.15, 0.13, 0.105];
-  const lichen: Vec3 = [0.22, 0.16, 0.07];
   const tilt = v3.norm([r() - 0.5, 2.5, r() - 0.5]);
   const strata = 9 + r() * 6;
   // Shared vertices with area-weighted normals: smooth shoulders, the cut faces stay flat.
@@ -70,13 +70,11 @@ export function rockMesh(seed: number): MeshData {
     tris.push(t);
   }
   const out = pos.map((p, i) => {
-    const n = v3.norm(nrm[i]);
     const tone = 0.5 + 0.6 * fbm(p[0] * 2.2 + off, p[2] * 2.2 + p[1] * 1.7, seed + 7, 3);
     const band = Math.sin(v3.dot(p, tilt) * strata + 2 * fbm(p[0] * 3, p[2] * 3, seed + 9, 2));
     let col = mixc(dark, warm, Math.min(1, Math.max(0, tone + 0.18 * band)));
     col = v3.scale(col, 0.8 + 0.35 * Math.min(1, p[1] * 1.4));
-    const lich = Math.max(0, n[1] - 0.3) * Math.max(0, fbm(p[0] * 9 + off, p[2] * 9, seed + 13, 2) - 0.22) * 6;
-    return b.vert(p, n, mixc(col, lichen, Math.min(0.45, lich)));
+    return b.vert(p, v3.norm(nrm[i]), col);
   });
   for (const [i, j, k] of tris) b.tri(out[i], out[j], out[k]);
   return b.build();
