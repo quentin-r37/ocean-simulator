@@ -7,7 +7,8 @@ struct ToolU {
   shovelCap: f32, fillCap: f32, rBase: f32, rTop: f32,
   moldH: f32, merlon: f32, halfLen: f32, halfWBase: f32,
   halfWTop: f32, moldAngle: f32, targetH: f32, digRate: f32,
-  fillRate: f32, scale: f32, cellsPerSide: f32, _p2: f32,
+  fillRate: f32, scale: f32, cellsPerSide: f32, digFloor: f32,
+  digDirX: f32, digDirZ: f32, _p2: f32, _p3: f32,
 }
 struct Inv {
   shovelSand: f32, shovelM: f32, bucketSand: f32, bucketM: f32,
@@ -78,21 +79,48 @@ fn gauss(r: f32, R: f32) -> f32 {
   let q = r / R;
   return exp(-3.0 * q * q) - exp(-3.0);
 }
+// Shovel blade: flat bottom and steep sides, a little longer along the shovel axis (horizontal view direction).
+fn bladeW(c: vec2i, R: f32) -> f32 {
+  let d = (vec2f(c) - center) * U.dx;
+  let dir = vec2f(U.digDirX, U.digDirZ);
+  let u = abs(dot(d, dir)) / R;
+  let v = abs(d.x * dir.y - d.y * dir.x) / (0.75 * R);
+  let q = pow(u * u * u + v * v * v, 1.0 / 3.0);
+  return 1.0 - smoothstep(0.65, 1.0, q);
+}
+fn footW(c: vec2i, R: f32, blade: bool) -> f32 {
+  if (blade) { return bladeW(c, R); }
+  return gauss(dist(c), R);
+}
+// Spoil of a full shovel: a low bank thrown on the far side of the hole, clear of its rim, stretched
+// across the shovel axis so that digging a trench raises a rampart along it.
+fn spoilW(c: vec2i, R: f32) -> f32 {
+  let dir = vec2f(U.digDirX, U.digDirZ);
+  let d = (vec2f(c) - center) * U.dx - dir * (2.1 * R);
+  let u = dot(d, dir) / (0.9 * R);
+  let v = (d.x * dir.y - d.y * dir.x) / (1.6 * R);
+  let q = max(1.0 - u * u - v * v, 0.0);
+  return q * q;
+}
 fn moistEq(above: f32) -> f32 { return select(0.8 * (1.0 - smoothstep(0.03, 0.9, above)), 1.0, above < 0.03); }
 
-// Removes up to `budget` m³ of sand (gaussian footprint of radius R), returns (m³ taken, Σ m³·moisture).
-fn takeSand(li: u32, R: f32, budget: f32) -> vec2f {
+// Removes up to `budget` m³ of sand (gaussian or blade footprint of radius R), never below the height `floor`.
+// Returns (m³ taken, Σ m³·moisture).
+fn takeSand(li: u32, R: f32, budget: f32, floor: f32, blade: bool) -> vec2f {
   var sw = 0.0;
   for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
-    if (c.x >= 0) { sw += gauss(dist(c), R); }
+    if (c.x >= 0) { sw += footW(c, R, blade); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = budget / (U.dx * U.dx);
   var tw = 0.0;
   for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
-    if (c.x >= 0) { tw += min(ground[idx(c)].y, b * gauss(dist(c), R) / SW); }
+    if (c.x >= 0) {
+      let g = ground[idx(c)];
+      tw += min(min(g.y, max(g.x + g.y - floor, 0.0)), b * footW(c, R, blade) / SW);
+    }
   }
   let TW = wsum(li, tw);
   let scale = select(0.0, min(1.0, b / TW), TW > 1e-9);
@@ -102,7 +130,7 @@ fn takeSand(li: u32, R: f32, budget: f32) -> vec2f {
     if (c.x >= 0) {
       let i = idx(c);
       var g = ground[i];
-      let take = min(g.y, b * gauss(dist(c), R) / SW) * scale;
+      let take = min(min(g.y, max(g.x + g.y - floor, 0.0)), b * footW(c, R, blade) / SW) * scale;
       if (take > 0.0) {
         tm += take * g.z;
         g.y -= take;
@@ -147,52 +175,19 @@ fn takeWater(li: u32, R: f32, budget: f32) -> f32 {
   return TW * scale * U.dx * U.dx;
 }
 
-// Adds `vol` m³ of loose sand with moisture `m` (gaussian footprint).
-fn depositSand(li: u32, R: f32, vol: f32, m: f32) {
+// Adds `vol` m³ of loose sand with moisture `m` (gaussian footprint, or the spoil heap of the shovel).
+fn depositSand(li: u32, R: f32, vol: f32, m: f32, spoil: bool) {
   var sw = 0.0;
   for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
-    if (c.x >= 0) { sw += gauss(dist(c), R); }
+    if (c.x >= 0) { sw += select(gauss(dist(c), R), spoilW(c, R), spoil); }
   }
   let SW = max(wsum(li, sw), 1e-6);
   let b = vol / (U.dx * U.dx);
   for (var k = 0; k < CPT; k++) {
     let c = cellK(k);
     if (c.x >= 0) {
-      let add = b * gauss(dist(c), R) / SW;
-      if (add > 0.0) {
-        let i = idx(c);
-        var g = ground[i];
-        let wOld = min(g.y, LAYER);
-        g.z = (g.z * wOld + m * add) / (wOld + add);
-        g.w = g.w * wOld / (wOld + add);
-        g.y += add;
-        ground[i] = g;
-        var w = water[i];
-        if (w.x > 0.0) { w.x = max(0.0, w.x - add); water[i] = w; }
-      }
-    }
-  }
-}
-
-// Spoil heap: adds `vol` m³ of loose sand in a ring around the footprint (radius R).
-fn ringW(r: f32, R: f32) -> f32 {
-  let q = (r - R * 1.1) / (R * 0.32);
-  if (abs(q) > 2.0) { return 0.0; }
-  return exp(-q * q) - exp(-4.0);
-}
-fn depositRing(li: u32, R: f32, vol: f32, m: f32) {
-  var sw = 0.0;
-  for (var k = 0; k < CPT; k++) {
-    let c = cellK(k);
-    if (c.x >= 0) { sw += ringW(dist(c), R); }
-  }
-  let SW = max(wsum(li, sw), 1e-6);
-  let b = vol / (U.dx * U.dx);
-  for (var k = 0; k < CPT; k++) {
-    let c = cellK(k);
-    if (c.x >= 0) {
-      let add = b * ringW(dist(c), R) / SW;
+      let add = b * select(gauss(dist(c), R), spoilW(c, R), spoil) / SW;
       if (add > 0.0) {
         let i = idx(c);
         var g = ground[i];
@@ -493,12 +488,13 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
   workgroupBarrier();
 
   if (U.mode == MODE_DIG) {
-    // Digging never stalls: once the shovel is full, the spoil is thrown onto a rim around the hole.
+    // The blade cuts a flat-bottomed hole down to the level set when the click started. Digging never
+    // stalls: once the shovel is full, the spoil is thrown onto a heap on the far side of the hole.
     let room = max(U.shovelCap - I.shovelSand, 0.0);
-    let r = takeSand(li, U.radius, U.digRate * U.dt * valid);
+    let r = takeSand(li, U.radius, U.digRate * U.dt * valid, U.digFloor, true);
     let kept = min(r.x, room);
     let mAvg = select(0.0, r.y / r.x, r.x > 1e-9);
-    depositRing(li, U.radius, r.x - kept, mAvg);
+    depositSand(li, U.radius, r.x - kept, mAvg, true);
     if (li == 0u) {
       if (kept > 0.0) {
         let total = I.shovelSand + kept;
@@ -509,7 +505,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
     }
   } else if (U.mode == MODE_DUMP) {
     let vol = min(I.shovelSand, U.shovelCap / 0.3 * U.dt) * valid;
-    depositSand(li, U.radius * 0.85, vol, I.shovelM);
+    depositSand(li, U.radius * 0.85, vol, I.shovelM, false);
     if (li == 0u) { inv.shovelSand = max(I.shovelSand - vol, 0.0); }
   } else if (U.mode == MODE_PAT) {
     smoothSand(li, U.radius, 9.0 * valid, 5.0);
@@ -519,7 +515,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
     let sandGate = select(valid, 0.0, waterMode);
     let waterGate = select(0.0, valid, waterMode);
     let rate = U.fillRate * U.dt;
-    let rs = takeSand(li, U.radius, min(max(U.fillCap - I.bucketSand, 0.0), rate) * sandGate);
+    let rs = takeSand(li, U.radius, min(max(U.fillCap - I.bucketSand, 0.0), rate) * sandGate, -1e9, false);
     let rw = takeWater(li, U.radius, min(max(U.fillCap - I.bucketWater, 0.0), rate * 1.5) * waterGate);
     if (li == 0u) {
       if (rs.x > 0.0) {

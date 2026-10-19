@@ -74,8 +74,12 @@ export class Tools {
     valid: false, pos: [0, 0, 0], normal: [0, 1, 0], isWater: false,
     waterDepth: 0, sand: 0, moisture: 0, compaction: 0,
   };
+  /** Horizontal axis of the shovel (view direction, x/z): the blade points along it, spoil is thrown along it. */
+  digDir: [number, number] = [0, 1];
   /** Height the trowel levels to (taken when the click starts). */
   private flattenTarget = 0;
+  /** Level the shovel digs down to (taken when the click starts). */
+  private digFloor = 0;
 
   private hitBuf: GPUBuffer;
   private invBuf: GPUBuffer;
@@ -94,14 +98,14 @@ export class Tools {
   private padStroke = false;
   private padShift = false;
   private pickData = new ArrayBuffer(48);
-  private toolData = new ArrayBuffer(96);
+  private toolData = new ArrayBuffer(112);
 
   constructor(private device: GPUDevice, private sim: Simulation, private decor: DecorSet) {
     this.hitBuf = createBuffer(device, 48, STORAGE, 'toolHit');
     this.invBuf = createBuffer(device, 32, STORAGE, 'toolInventory');
     this.state = createBuffer(device, INV_OFFSET + 32, STORAGE, 'toolState');
     this.pickU = createBuffer(device, 48, UNIFORM, 'pickU');
-    this.toolU = createBuffer(device, 96, UNIFORM, 'toolU');
+    this.toolU = createBuffer(device, 112, UNIFORM, 'toolU');
     this.pickPipe = computePipeline(device, pickWgsl, 'pick');
     this.toolPipe = computePipeline(device, toolsWgsl, 'tools');
     this.pickGroup = device.createBindGroup({
@@ -202,6 +206,8 @@ export class Tools {
     if (active) {
       switch (this.tool) {
         case 'shovel':
+          // One stroke digs one level: a fixed depth below the sand surface aimed at the start of the click.
+          if (pressed && this.hit.valid) this.digFloor = this.hit.pos[1] - this.hit.waterDepth - toolSpec.digDepth;
           mode = alt ? Mode.Pat : shift ? Mode.Dump : Mode.Dig;
           break;
         case 'trowel':
@@ -294,6 +300,11 @@ export class Tools {
     tf[21] = TOOL_SCALE;
     // Cells per thread side of the workgroup window: 16×8 = 128 cells, 16×16 = 256 for the giant bucket.
     tf[22] = giant ? 16 : 8;
+    tf[23] = this.digFloor;
+    const h = Math.hypot(dir[0], dir[2]);
+    if (h > 1e-3) this.digDir = [dir[0] / h, dir[2] / h];
+    tf[24] = this.digDir[0];
+    tf[25] = this.digDir[1];
     this.device.queue.writeBuffer(this.toolU, 0, this.toolData);
 
     const pass = encoder.beginComputePass({ label: 'tools' });

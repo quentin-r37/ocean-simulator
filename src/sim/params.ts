@@ -111,6 +111,8 @@ export const toolSpec = {
   /** Time (s) to fill the shovel / a mould while digging. */
   digTime: 0.45,
   fillTime: 0.45,
+  /** Depth (m) one click of the shovel digs down to, below the aimed sand surface. */
+  digDepth: 0.3 * TOOL_SCALE,
   /** The giant bucket scoops from a much wider area, and takes longer to fill. */
   giantFillRadius: 1.5 * TOOL_SCALE,
   giantFillTime: 1.1,

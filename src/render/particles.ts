@@ -1,5 +1,5 @@
 import { compose, mat4RotateX, mat4RotateY, mat4Scale, mat4Translate, Vec3 } from '../math';
-import { molds } from '../sim/params';
+import { molds, toolSpec } from '../sim/params';
 import { isMold, Mode, Tools } from '../tools/tools';
 import { DrawItem, SAND_TINT } from './toolMesh';
 
@@ -32,10 +32,12 @@ export class Particles {
     if (hit.valid) {
       const [x, y, z] = hit.pos;
       let rate = 0;
-      let kind: 'spray' | 'fall' | 'drip' | 'shave' = 'spray';
+      let kind: 'spray' | 'throw' | 'fall' | 'drip' | 'shave' = 'spray';
       switch (tools.mode) {
         case Mode.Dig:
           rate = 70;
+          // Full shovel: the spoil flies onto the heap beyond the hole.
+          if (inv.shovelSand >= toolSpec.shovelCap * 0.98) kind = 'throw';
           break;
         case Mode.Dump:
           if (inv.shovelSand > 1e-5) {
@@ -70,6 +72,11 @@ export class Particles {
         if (kind === 'spray') {
           const h = rnd(0.6, 1.6);
           this.spawn([x + c * 0.1, y + 0.02, z + s * 0.1], [c * h, rnd(1.8, 3.2), s * h], y - 0.2, rnd(0.045, 0.085), sand, false);
+        } else if (kind === 'throw') {
+          const [dx, dz] = tools.digDir;
+          const j = rnd(-0.4, 0.4), h = rnd(1.2, 2.2);
+          const tx = dx - dz * j, tz = dz + dx * j;
+          this.spawn([x + c * 0.05, y + 0.02, z + s * 0.05], [tx * h, rnd(2.2, 3.2), tz * h], y - 0.2, rnd(0.045, 0.085), sand, false);
         } else if (kind === 'fall') {
           this.spawn([x + c * 0.08, y + 0.35, z + s * 0.08], [c * 0.3, rnd(-0.5, 0.3), s * 0.3], y - 0.05, rnd(0.05, 0.09), SAND_TINT(inv.shovelM), false);
         } else if (kind === 'drip') {

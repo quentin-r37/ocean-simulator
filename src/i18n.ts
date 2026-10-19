@@ -92,7 +92,7 @@ const fr = {
   'help.keyboardMode': 'clavier et souris',
   'help.gamepadMode': 'manette',
   'help.keyboard': [
-    "<b>Pelle</b> : clic creuser (pelle pleine : les déblais vont sur le bord du trou) · <kbd>Maj</kbd> vider · <kbd>Alt</kbd> tasser",
+    "<b>Pelle</b> : clic creuser d'un niveau (fond plat ; en traînant, un fossé de niveau ; pelle pleine : les déblais sont jetés derrière le trou) · <kbd>Maj</kbd> vider · <kbd>Alt</kbd> tasser",
     "<b>Seaux / moule</b> : clic remplir (sable, ou eau en visant la mer) · <kbd>Maj</kbd>+clic retourner (ou verser l'eau) · <kbd>F</kbd> tourner la muraille",
     '<b>Truelle</b> : clic sculpter · <kbd>Maj</kbd> lisser · <kbd>Alt</kbd> aplanir à la hauteur visée (terrasses, escaliers)',
     "<b>Seau géant</b> (<kbd>7</kbd>) : comme le seau, mais il ramasse plusieurs m³ d'un coup sur une large zone (sable ou eau) pour déplacer des dunes entières",
@@ -212,7 +212,7 @@ const en: Strings = {
   'help.keyboardMode': 'keyboard and mouse',
   'help.gamepadMode': 'gamepad',
   'help.keyboard': [
-    '<b>Shovel</b>: click to dig (when full, the spoil goes on the rim of the hole) · <kbd>Shift</kbd> empty · <kbd>Alt</kbd> pack',
+    '<b>Shovel</b>: click to dig one level down (flat bottom; drag for a level trench; when full, the spoil is thrown beyond the hole) · <kbd>Shift</kbd> empty · <kbd>Alt</kbd> pack',
     '<b>Buckets / mould</b>: click to fill (sand, or water when aiming at the sea) · <kbd>Shift</kbd>+click to turn out (or pour the water) · <kbd>F</kbd> rotate the wall',
     '<b>Trowel</b>: click to sculpt · <kbd>Shift</kbd> smooth · <kbd>Alt</kbd> flatten to the aimed height (terraces, stairs)',
     '<b>Giant bucket</b> (<kbd>7</kbd>): like the bucket, but scoops several m³ at once over a wide area (sand or water) to move whole dunes',
