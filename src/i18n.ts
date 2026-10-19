@@ -96,6 +96,8 @@ const fr = {
     '<kbd>T</kbd> pause marée · <kbd>+</kbd>/<kbd>-</kbd> vitesse · <kbd>R</kbd> réinitialiser · <kbd>H</kbd> aide',
     '<kbd>Y</kbd> tsunami · <kbd>N</kbd> nouvelle plage aléatoire · <kbd>B</kbd> ambiance suivante (matin, midi, soir, tempête…)',
     '<kbd>M</kbd> musique suivante · <kbd>Maj</kbd>+<kbd>M</kbd> couper / remettre la musique',
+    '<b>Manette</b> : <kbd>L1</kbd>/<kbd>R1</kbd> outil précédent / suivant · <kbd>L2</kbd> creuser, remplir, sculpter, retirer · <kbd>R2</kbd> vider, retourner, lisser, poser · <kbd>□</kbd>/<kbd>X</kbd> maintenu : tasser, aplanir · <kbd>△</kbd>/<kbd>Y</kbd> tourner la muraille',
+    'Manette : stick gauche se déplacer · stick droit tourner (gauche / droite) et zoomer (haut / bas) · croix ◀ ▶ objet de décor, ▲ ▼ vitesse marée · <kbd>○</kbd>/<kbd>B</kbd> pause marée · <kbd>Options</kbd> aide · <kbd>Create</kbd>/<kbd>View</kbd> ambiance',
     'Astuce : le sable humide tient en murs verticaux, le sec s\'éboule. Arrosez vos tours !',
   ],
 
@@ -200,6 +202,8 @@ const en: Strings = {
     '<kbd>T</kbd> pause tide · <kbd>+</kbd>/<kbd>-</kbd> speed · <kbd>R</kbd> reset · <kbd>H</kbd> help',
     '<kbd>Y</kbd> tsunami · <kbd>N</kbd> new random beach · <kbd>B</kbd> next ambience (morning, noon, evening, storm…)',
     '<kbd>M</kbd> next track · <kbd>Shift</kbd>+<kbd>M</kbd> mute / unmute the music',
+    '<b>Gamepad</b>: <kbd>L1</kbd>/<kbd>R1</kbd> previous / next tool · <kbd>L2</kbd> dig, fill, sculpt, remove · <kbd>R2</kbd> empty, turn out, smooth, place · hold <kbd>□</kbd>/<kbd>X</kbd>: pack, flatten · <kbd>△</kbd>/<kbd>Y</kbd> rotate the wall',
+    'Gamepad: left stick move · right stick rotate (left / right) and zoom (up / down) · D-pad ◀ ▶ decor object, ▲ ▼ tide speed · <kbd>○</kbd>/<kbd>B</kbd> pause tide · <kbd>Options</kbd> help · <kbd>Create</kbd>/<kbd>View</kbd> ambience',
     'Tip: wet sand holds vertical walls, dry sand slumps. Water your towers!',
   ],
 

@@ -1,5 +1,5 @@
 import { initGpu, showError } from './gpu/device';
-import { Input } from './input/input';
+import { Input, PAD } from './input/input';
 import { IsoCamera } from './camera/isoCamera';
 import { Simulation } from './sim/simulation';
 import { gridSize, molds, settings } from './sim/params';
@@ -76,33 +76,34 @@ async function main(): Promise<void> {
     }
     const dt = Math.min((now - last) / 1000, 1 / 20);
     last = now;
+    input.poll();
 
-    if (input.hit('KeyT')) settings.tidePaused = !settings.tidePaused;
-    if (input.hit('+') || input.hit('Equal') || input.hit('NumpadAdd') || input.hit('BracketRight'))
+    if (input.hit('KeyT') || input.hit(PAD.B)) settings.tidePaused = !settings.tidePaused;
+    if (input.hit('+') || input.hit('Equal') || input.hit('NumpadAdd') || input.hit('BracketRight') || input.hit(PAD.Up))
       settings.tideSpeed = Math.min(settings.tideSpeed * 2 || 1, 32);
-    if (input.hit('-') || input.hit('Minus') || input.hit('NumpadSubtract') || input.hit('BracketLeft'))
+    if (input.hit('-') || input.hit('Minus') || input.hit('NumpadSubtract') || input.hit('BracketLeft') || input.hit(PAD.Down))
       settings.tideSpeed = settings.tideSpeed > 1 ? settings.tideSpeed / 2 : 0.5;
     if (input.hit('KeyR')) reset();
     if (input.hit('KeyN')) world.randomBeach();
-    if (input.hit('KeyB')) ambience.next();
+    if (input.hit('KeyB') || input.hit(PAD.Select)) ambience.next();
     if (input.hit('KeyY')) world.tsunami();
     if (input.hit('KeyM')) {
       if (input.shift) music.toggle();
       else music.next();
     }
     ambience.update(dt);
-    if (input.hit('KeyH')) {
+    if (input.hit('KeyH') || input.hit(PAD.Start)) {
       const help = document.getElementById('help') as HTMLDetailsElement;
       help.open = !help.open;
     }
 
     resize();
     camera.update(input, dt);
-    tools.update(input, dt, hud.pointerOverUi);
+    tools.update(input, dt, hud.pointerOverUi && !input.usingPad);
 
     const encoder = device.createCommandEncoder();
     sim.encode(encoder, dt);
-    tools.encode(encoder, camera, [input.mouseX, input.mouseY], [canvas.clientWidth, canvas.clientHeight], dt, input.alt, input.shift);
+    tools.encode(encoder, camera, [input.mouseX, input.mouseY], [canvas.clientWidth, canvas.clientHeight], dt, tools.alt, tools.shift);
     const afterVolume = sim.encodeVolume(encoder);
     const afterTools = tools.encodeReadback(encoder);
 
@@ -120,7 +121,7 @@ async function main(): Promise<void> {
       cursor: {
         x: hit.pos[0],
         z: hit.pos[2],
-        radius: tools.cursorRadius(input.alt, input.shift),
+        radius: tools.cursorRadius(tools.alt, tools.shift),
         visible: hit.valid,
         water: hit.isWater,
         wallHalfLen: isWall ? molds.wall.halfLen : 0,
@@ -129,7 +130,7 @@ async function main(): Promise<void> {
       items,
       decor,
       preview:
-        tools.tool === 'decor' && hit.valid && !input.shift
+        tools.tool === 'decor' && hit.valid && !tools.shift
           ? { kind, variant: Math.floor(tools.decorSeed * 997) % DECOR[kind].meshes.length, x: hit.pos[0], z: hit.pos[2], seed: tools.decorSeed }
           : null,
     });

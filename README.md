@@ -43,6 +43,25 @@ Un clic bref, ou un tap sur le trackpad, fait un geste complet : une pelletée, 
 - `N` génère une plage aléatoire, `B` change d'ambiance.
 - `Y`, ou le bouton 🌊 du panneau, envoie un tsunami : une longue onde solitaire arrive du large et submerge la plage. Sa hauteur se règle dans « Houle ».
 
+## Manette (PlayStation / Xbox)
+
+Une manette branchée est reconnue dès qu'on appuie sur un bouton. Tant qu'on s'en sert, on vise le centre de l'écran ; bouger la souris rend la main à la souris.
+
+| Commande | Action |
+| --- | --- |
+| `L1` / `R1` (`LB` / `RB`) | outil précédent / suivant |
+| `L2` (`LT`) | enlever : creuser, remplir le seau, sculpter, retirer un décor (= clic, ou Maj + clic en décor) |
+| `R2` (`RT`) | poser : vider la pelle, retourner le seau ou verser l'eau, lisser, poser un décor (= Maj + clic, ou clic en décor) |
+| `□` (`X`) maintenu | tasser (pelle), aplanir (truelle), comme `Alt` |
+| `△` (`Y`) | tourner le moule à muraille |
+| stick gauche | déplacer la caméra |
+| stick droit | gauche / droite : pivoter d'un quart de tour ; haut / bas : zoom |
+| croix ◀ / ▶ | objet de décor précédent / suivant |
+| croix ▲ / ▼ | vitesse de la marée |
+| `○` (`B`) | pause de la marée |
+| `Create` (`View`) | ambiance suivante |
+| `Options` (`Menu`) | aide |
+
 ## Physique
 
 - **Eau** : modèle d'eau peu profonde à « tuyaux virtuels ». La conductance dépend de la profondeur, si bien que les vagues avancent à √(g·h), ralentissent et se raidissent à l'approche du rivage. Une zone de génération et d'absorption de houle borde le large. La marée est sinusoïdale.

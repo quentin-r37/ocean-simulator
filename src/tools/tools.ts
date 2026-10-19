@@ -1,5 +1,5 @@
 import { computePipeline, createBuffer, Readback, STORAGE, UNIFORM } from '../gpu/utils';
-import type { Input } from '../input/input';
+import { PAD, type Input } from '../input/input';
 import type { IsoCamera } from '../camera/isoCamera';
 import type { Simulation } from '../sim/simulation';
 import { MoldKind, molds, TOOL_SCALE, toolSpec } from '../sim/params';
@@ -66,6 +66,9 @@ export class Tools {
   /** Selected decoration (index into DECOR). */
   decorKind = 0;
   decorSeed = Math.random();
+  /** Effective modifiers of the last update (keyboard, or gamepad trigger / button). */
+  shift = false;
+  alt = false;
   inventory: Inventory = { shovelSand: 0, shovelM: 0, bucketSand: 0, bucketM: 0, bucketWater: 0, flips: 0 };
   hit: Hit = {
     valid: false, pos: [0, 0, 0], normal: [0, 1, 0], isWater: false,
@@ -87,6 +90,9 @@ export class Tools {
   private flipLatched = false;
   /** A click always performs a full stroke, even if the button is released at once (trackpad tap). */
   private stroke = 0;
+  /** The current stroke comes from a gamepad trigger, and whether it is the Shift one. */
+  private padStroke = false;
+  private padShift = false;
   private pickData = new ArrayBuffer(48);
   private toolData = new ArrayBuffer(96);
 
@@ -155,37 +161,57 @@ export class Tools {
     }
   }
 
-  /** Decides the tool action from the input state. */
+  /**
+   * Decides the tool action from the input state. On a gamepad, L2 takes sand away (dig, fill,
+   * carve, remove a decoration) and R2 puts it down (empty, turn out, smooth, place a decoration):
+   * the triggers stand for a click and a Shift+click, swapped for the decor tool. □ / X is Alt.
+   */
   update(input: Input, dt: number, uiBlocked: boolean): void {
     this.events.length = 0;
     TOOL_ORDER.forEach((t, i) => {
       if (input.hit(`Digit${i + 1}`) || input.hit(`Numpad${i + 1}`)) this.tool = t;
     });
-    if (input.hit('KeyF')) this.moldAngle = (this.moldAngle + Math.PI / 4) % Math.PI;
-    if (input.hit('KeyC')) {
+    const step = (input.hit(PAD.R1) ? 1 : 0) - (input.hit(PAD.L1) ? 1 : 0);
+    if (step) this.tool = TOOL_ORDER[(TOOL_ORDER.indexOf(this.tool) + step + TOOL_ORDER.length) % TOOL_ORDER.length];
+    if (input.hit('KeyF') || input.hit(PAD.Y)) this.moldAngle = (this.moldAngle + Math.PI / 4) % Math.PI;
+    const decorStep = input.hit('KeyC') ? (input.shift ? -1 : 1) : input.hit(PAD.Right) ? 1 : input.hit(PAD.Left) ? -1 : 0;
+    if (decorStep) {
       const pal = Tools.palette();
       const at = pal.indexOf(this.decorKind);
-      this.selectDecor(pal[(at + (input.shift ? pal.length - 1 : 1)) % pal.length]);
+      this.selectDecor(pal[(at + decorStep + pal.length) % pal.length]);
     }
     this.flipAge += dt;
 
+    const take = input.down(PAD.L2);
+    const put = input.down(PAD.R2);
+    if (take || put) this.padShift = this.tool === 'decor' ? take && !put : put;
+    if (input.leftPressed) this.padStroke = false;
+    else if (input.hit(PAD.L2) || input.hit(PAD.R2)) this.padStroke = true;
+    // A stroke started with a trigger keeps its direction after the trigger is released.
+    const pad = take || put || (this.padStroke && this.stroke > 0);
+    this.shift = pad ? this.padShift : input.shift;
+    this.alt = input.alt || input.down(PAD.X);
+    const { shift, alt } = this;
+    const held = input.left || take || put;
+    const pressed = input.leftPressed || input.hit(PAD.L2) || input.hit(PAD.R2);
+
     let mode = Mode.None;
-    if (input.leftPressed && !uiBlocked && !input.right) this.stroke = this.strokeTime();
+    if (pressed && !uiBlocked && !input.right) this.stroke = this.strokeTime();
     else this.stroke = Math.max(0, this.stroke - dt);
-    const active = (input.left || this.stroke > 0) && !uiBlocked && !input.right;
+    const active = (held || this.stroke > 0) && !uiBlocked && !input.right;
     if (active) {
       switch (this.tool) {
         case 'shovel':
-          mode = input.alt ? Mode.Pat : input.shift ? Mode.Dump : Mode.Dig;
+          mode = alt ? Mode.Pat : shift ? Mode.Dump : Mode.Dig;
           break;
         case 'trowel':
-          if (input.leftPressed && this.hit.valid) this.flattenTarget = this.hit.pos[1];
-          mode = input.alt ? Mode.Flatten : input.shift ? Mode.Smooth : Mode.Carve;
+          if (pressed && this.hit.valid) this.flattenTarget = this.hit.pos[1];
+          mode = alt ? Mode.Flatten : shift ? Mode.Smooth : Mode.Carve;
           break;
         case 'decor':
-          if (input.leftPressed && this.hit.valid) {
+          if (pressed && this.hit.valid) {
             const [x, , z] = this.hit.pos;
-            if (input.shift) {
+            if (shift) {
               this.decor.removeNear(x, z, 0.3);
               this.events.push('decorRemove');
             } else {
@@ -196,8 +222,8 @@ export class Tools {
           }
           break;
         default:
-          if (input.shift) {
-            if (input.leftPressed && this.inventory.bucketSand > 1e-6) {
+          if (shift) {
+            if (pressed && this.inventory.bucketSand > 1e-6) {
               mode = Mode.Flip;
               this.flipLatched = true;
               this.flipAge = 0;
@@ -211,7 +237,7 @@ export class Tools {
           }
       }
     }
-    if (!input.left && this.stroke <= 0) this.flipLatched = false;
+    if (!held && this.stroke <= 0) this.flipLatched = false;
     this.mode = mode;
   }
 
