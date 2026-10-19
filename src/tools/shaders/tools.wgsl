@@ -36,6 +36,7 @@ const TROWEL_SPILL: f32 = 10.0;
 var<workgroup> red: array<f32, 256>;
 var<private> origin: vec2i;
 var<private> center: vec2f;
+var<private> spoilAt: vec2f;
 var<private> lid2: vec2i;
 // Cells per thread side (window / 16) and per thread.
 var<private> CPS: i32;
@@ -93,10 +94,20 @@ fn footW(c: vec2i, R: f32, blade: bool) -> f32 {
   return gauss(dist(c), R);
 }
 // Spoil of a full shovel: a low bank thrown on the far side of the hole, clear of its rim, stretched
-// across the shovel axis so that digging a trench raises a rampart along it.
+// across the shovel axis so that digging a trench raises a rampart along it. Near the edge of the
+// board it goes to the near side instead, and always stays on the board (a clipped heap would pile
+// all its volume on the few cells left).
+fn spoilCenter(R: f32) -> vec2f {
+  let dir = vec2f(U.digDirX, U.digDirZ);
+  let lo = vec2f(1.7 * R / U.dx);
+  let hi = vec2f(f32(U.n) - 1.0) - lo;
+  var p = center + dir * (2.1 * R / U.dx);
+  if (any(p < lo) || any(p > hi)) { p = center - dir * (2.1 * R / U.dx); }
+  return clamp(p, lo, hi);
+}
 fn spoilW(c: vec2i, R: f32) -> f32 {
   let dir = vec2f(U.digDirX, U.digDirZ);
-  let d = (vec2f(c) - center) * U.dx - dir * (2.1 * R);
+  let d = (vec2f(c) - spoilAt) * U.dx;
   let u = dot(d, dir) / (0.9 * R);
   let v = (d.x * dir.y - d.y * dir.x) / (1.6 * R);
   let q = max(1.0 - u * u - v * v, 0.0);
@@ -483,6 +494,7 @@ fn main(@builtin(local_invocation_id) lid: vec3u, @builtin(local_invocation_inde
   CPS = i32(U.cellsPerSide);
   CPT = CPS * CPS;
   origin = vec2i(floor(center)) - vec2i(CPS * 8);
+  spoilAt = spoilCenter(U.radius);
 
   let I = inv;
   workgroupBarrier();

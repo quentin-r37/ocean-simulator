@@ -203,11 +203,44 @@ export const SAND_TINT = (m: number): [number, number, number, number] => {
   return [0.93 * k, 0.8 * k * k, 0.53 * k * k, 1];
 };
 
+/**
+ * Digging gesture, one pose per quarter of the cycle: push the blade in, lever the handle down, lift the
+ * load (and throw it onto the heap when the shovel is full), back to rest. Each pose is
+ * [depth into the sand 0..1, handle elevation offset (deg), lift above the ground 0..1, throw 0..1].
+ */
+const DIG_POSES = [
+  [0, 0, 0, 0],
+  [1, -6, 0, 0],
+  [0.7, -24, 0, 0],
+  [-0.15, -12, 0.7, 1],
+];
+/** Duration (s) of one digging gesture. */
+const DIG_CYCLE = 0.6;
+
+/** Cyclic Catmull-Rom through evenly spaced poses, at phase p (cycles). */
+function cyclicSpline(poses: number[][], p: number): number[] {
+  const n = poses.length;
+  const x = (p - Math.floor(p)) * n;
+  const i = Math.floor(x);
+  const t = x - i;
+  const k = (j: number) => poses[(i + j + n) % n];
+  return k(0).map((_, c) => {
+    const p0 = k(-1)[c], p1 = k(0)[c], p2 = k(1)[c], p3 = k(2)[c];
+    return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
+  });
+}
+
 /** Smoothly animated placement of the active tool. */
 export class ToolAnimator {
   private pos: Vec3 = [8, 0.3, 8];
   private yaw = 0;
+  /** Horizontal unit vector from the tool towards the camera. */
+  private back: Vec3 = [0, 0, 1];
   private digPhase = 0;
+  /** Shovel gesture (cycles); it always runs to the end of the current cycle before resting. */
+  private digCycle = 0;
+  /** Gesture amplitude: full while the blade bites, small once the hole has reached its level. */
+  private digAmp = 1;
   private dumpBlend = 0;
   private patBlend = 0;
   private fillBlend = 0;
@@ -219,6 +252,7 @@ export class ToolAnimator {
     const k = 1 - Math.exp(-dt * 25);
     this.pos = v3.lerp(this.pos, hit.pos, k);
     const back = v3.norm([camPos[0] - this.pos[0], 0, camPos[2] - this.pos[2]]);
+    this.back = back;
     const targetYaw = tools.tool === 'wall' ? -tools.moldAngle : Math.atan2(back[0], back[2]);
     let dy = targetYaw - this.yaw;
     while (dy > Math.PI) dy -= Math.PI * 2;
@@ -231,9 +265,14 @@ export class ToolAnimator {
     this.patBlend = ease(this.patBlend, m === Mode.Pat);
     this.fillBlend = ease(this.fillBlend, m === Mode.Fill);
     this.pourBlend = ease(this.pourBlend, m === Mode.Pour, 6);
-    const working = m === Mode.Dig || m === Mode.Pat || m === Mode.Carve || m === Mode.Smooth || m === Mode.Flatten;
-    if (working) this.digPhase += dt * (m === Mode.Dig ? 9 : 14);
+    const working = m === Mode.Pat || m === Mode.Carve || m === Mode.Smooth || m === Mode.Flatten;
+    if (working) this.digPhase += dt * 14;
     else this.digPhase = 0;
+    const next = this.digCycle + dt / DIG_CYCLE;
+    if (m === Mode.Dig) this.digCycle = next;
+    else if (this.digCycle > 0) this.digCycle = Math.floor(next) > Math.floor(this.digCycle) ? 0 : next;
+    if (m === Mode.Dig) this.digAmp += ((tools.biting ? 1 : 0.3) - this.digAmp) * Math.min(1, dt * 6);
+    else if (this.digCycle === 0) this.digAmp = 1;
 
     if (tools.tool === 'shovel') return this.shovel(tools);
     if (tools.tool === 'trowel') return this.trowel(tools);
@@ -242,16 +281,18 @@ export class ToolAnimator {
 
   private shovel(tools: Tools): DrawItem[] {
     const inv = tools.inventory;
-    const digging = tools.mode === Mode.Dig;
-    const plunge = digging ? Math.max(0, Math.sin(this.digPhase)) : 0;
+    const full = inv.shovelSand >= toolSpec.shovelCap * 0.98;
+    const [depth, elevOff, lift, throwT] = cyclicSpline(DIG_POSES, this.digCycle).map((x) => x * this.digAmp);
+    const toss = full ? throwT : 0;
     const pat = this.patBlend * Math.abs(Math.sin(this.digPhase)) * 0.05 * S;
-    const elev = (55 - 15 * plunge - 30 * this.patBlend) * (Math.PI / 180);
-    const roll = this.dumpBlend * 2.2 + this.patBlend * Math.PI;
+    const elev = (55 + elevOff - 30 * this.patBlend) * (Math.PI / 180);
+    const roll = this.dumpBlend * 2.2 + this.patBlend * Math.PI + 0.7 * toss;
+    const at = v3.add(this.pos, v3.scale(this.back, -0.15 * toss * S));
     const model = compose(
-      mat4Translate(v3.add(this.pos, [0, (0.015 - 0.08 * plunge) * S + pat, 0])),
+      mat4Translate(v3.add(at, [0, (0.015 - 0.08 * depth + 0.1 * lift) * S + pat, 0])),
       mat4RotateY(this.yaw),
       mat4RotateX(-elev),
-      mat4Translate([0, 0, -0.1 * plunge * S]),
+      mat4Translate([0, 0, -0.1 * depth * S]),
       mat4RotateZ(roll),
       mat4Translate([0, this.patBlend * 0.05 * S, 0]),
       mat4Scale([1.7 * S, 1.7 * S, 1.7 * S]),

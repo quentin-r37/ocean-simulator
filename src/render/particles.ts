@@ -35,7 +35,7 @@ export class Particles {
       let kind: 'spray' | 'throw' | 'fall' | 'drip' | 'shave' = 'spray';
       switch (tools.mode) {
         case Mode.Dig:
-          rate = 70;
+          rate = tools.biting ? 70 : 8;
           // Full shovel: the spoil flies onto the heap beyond the hole.
           if (inv.shovelSand >= toolSpec.shovelCap * 0.98) kind = 'throw';
           break;

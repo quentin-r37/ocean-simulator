@@ -37,6 +37,8 @@ export interface Inventory {
   bucketM: number;
   bucketWater: number;
   flips: number;
+  /** m³ of sand the shovel cut in its last digging frame. */
+  lastTaken: number;
 }
 
 export interface Hit {
@@ -69,7 +71,7 @@ export class Tools {
   /** Effective modifiers of the last update (keyboard, or gamepad trigger / button). */
   shift = false;
   alt = false;
-  inventory: Inventory = { shovelSand: 0, shovelM: 0, bucketSand: 0, bucketM: 0, bucketWater: 0, flips: 0 };
+  inventory: Inventory = { shovelSand: 0, shovelM: 0, bucketSand: 0, bucketM: 0, bucketWater: 0, flips: 0, lastTaken: 0 };
   hit: Hit = {
     valid: false, pos: [0, 0, 0], normal: [0, 1, 0], isWater: false,
     waterDepth: 0, sand: 0, moisture: 0, compaction: 0,
@@ -132,7 +134,12 @@ export class Tools {
 
   resetInventory(): void {
     this.device.queue.writeBuffer(this.invBuf, 0, new Float32Array(8));
-    this.inventory = { shovelSand: 0, shovelM: 0, bucketSand: 0, bucketM: 0, bucketWater: 0, flips: 0 };
+    this.inventory = { shovelSand: 0, shovelM: 0, bucketSand: 0, bucketM: 0, bucketWater: 0, flips: 0, lastTaken: 0 };
+  }
+
+  /** The shovel still cuts into the sand (false once the hole has reached the level of the stroke). */
+  get biting(): boolean {
+    return this.inventory.lastTaken > (toolSpec.shovelCap / toolSpec.digTime) * 0.002;
   }
 
   select(tool: ToolKind): void {
@@ -348,5 +355,6 @@ export class Tools {
     inv.bucketM = r[k + 3];
     inv.bucketWater = r[k + 4];
     inv.flips = r[k + 5];
+    inv.lastTaken = r[k + 6];
   }
 }
