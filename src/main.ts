@@ -2,7 +2,7 @@ import { initGpu, showError } from './gpu/device';
 import { Input, PAD } from './input/input';
 import { IsoCamera } from './camera/isoCamera';
 import { Simulation } from './sim/simulation';
-import { gridSize, molds, settings } from './sim/params';
+import { gridSize, molds, settings, TIME_SCALES } from './sim/params';
 import { Tools } from './tools/tools';
 import { Renderer } from './render/renderer';
 import { ToolAnimator } from './render/toolMesh';
@@ -83,6 +83,11 @@ async function main(): Promise<void> {
       settings.tideSpeed = Math.min(settings.tideSpeed * 2 || 1, 32);
     if (input.hit('-') || input.hit('Minus') || input.hit('NumpadSubtract') || input.hit('BracketLeft') || input.hit(PAD.Down))
       settings.tideSpeed = settings.tideSpeed > 1 ? settings.tideSpeed / 2 : 0.5;
+    if (input.hit('KeyV') || input.hit(PAD.R3)) {
+      const n = TIME_SCALES.length;
+      const at = Math.max(TIME_SCALES.indexOf(settings.timeScale), 0);
+      settings.timeScale = TIME_SCALES[(at + (input.hit('KeyV') && input.shift ? -1 : 1) + n) % n];
+    }
     if (input.hit('KeyR')) reset();
     if (input.hit('KeyN')) world.randomBeach();
     if (input.hit('KeyB') || input.hit(PAD.Select)) ambience.next();
@@ -139,7 +144,7 @@ async function main(): Promise<void> {
     afterTools?.();
     tools.sync();
     sim.updateVolume();
-    hud.frame(dt, sim);
+    hud.frame(dt, sim, input.padConnected);
     input.endFrame();
     requestAnimationFrame(frame);
   };

@@ -54,6 +54,8 @@ export class Simulation {
   frame = 0;
   dtMax: number;
   sandVolume = 0;
+  /** Simulated seconds per real second actually achieved (smoothed), below `timeScale` when capped. */
+  speed = 1;
   private lastVolumeFrame = -1000;
   /** Simulated time owed to the water solver (fixed steps of dtMax). */
   private stepDebt = 0;
@@ -213,12 +215,15 @@ export class Simulation {
   encode(encoder: GPUCommandEncoder, frameDt: number): void {
     // Fixed time step: the pipe model sits close to its CFL limit, and a step size that changes
     // from frame to frame (frame-pacing jitter) excites grid-scale waves until the surface blows up.
-    const maxSteps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.round(settings.substeps)));
+    // Time acceleration runs more water steps per frame (the budget grows with it).
+    const scale = Math.max(settings.timeScale, 0);
+    const maxSteps = Math.max(1, Math.min(MAX_SUBSTEPS, Math.round(settings.substeps * Math.max(scale, 1))));
     const dt = this.dtMax;
-    this.stepDebt += frameDt;
+    this.stepDebt += frameDt * scale;
     const steps = Math.min(maxSteps, Math.floor(this.stepDebt / dt));
     // Time beyond the substep budget is dropped (slow motion) rather than piling up.
     this.stepDebt = Math.min(this.stepDebt - steps * dt, dt);
+    if (frameDt > 0) this.speed += ((steps * dt) / frameDt - this.speed) * Math.min(frameDt * 2, 1);
     if (steps === 0) return;
     const wg = Math.ceil(this.n / 16);
     const p = this.pipelines;

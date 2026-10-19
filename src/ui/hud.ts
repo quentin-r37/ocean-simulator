@@ -1,5 +1,5 @@
 import GUI from 'lil-gui';
-import { molds, settings, tideRising, toolSpec } from '../sim/params';
+import { molds, settings, tideRising, TIME_SCALES, toolSpec } from '../sim/params';
 import type { Simulation } from '../sim/simulation';
 import { isMold, ToolKind, Tools } from '../tools/tools';
 import { DECOR } from '../world/decor';
@@ -18,6 +18,8 @@ export interface WorldControls {
 }
 
 const $ = (id: string) => document.getElementById(id)!;
+/** Whether the controls panel is open, kept across visits. */
+const HELP_KEY = 'sandcastle.helpOpen';
 
 export class Hud {
   private fpsAcc = 0;
@@ -26,6 +28,8 @@ export class Hud {
   private gui!: GUI;
   private amb = { index: 0 };
   private langState = { lang };
+  /** The controls panel lists the gamepad controls (a gamepad is connected) instead of the keyboard ones. */
+  private padMode = false;
 
   constructor(private tools: Tools, private world: WorldControls, private music: Music, private onReset: () => void, private onScale: () => void) {
     document.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) => {
@@ -41,6 +45,27 @@ export class Hud {
       b.addEventListener('click', () => tools.selectDecor(k));
       pal.appendChild(b);
     }
+    const speed = $('speed');
+    for (const x of TIME_SCALES) {
+      const b = document.createElement('button');
+      b.textContent = `×${x}`;
+      b.dataset.scale = String(x);
+      b.addEventListener('click', () => (settings.timeScale = x));
+      speed.appendChild(b);
+    }
+    const help = $('help') as HTMLDetailsElement;
+    try {
+      if (localStorage.getItem(HELP_KEY) === '0') help.open = false;
+    } catch {
+      // Storage unavailable: keep the default (open).
+    }
+    help.addEventListener('toggle', () => {
+      try {
+        localStorage.setItem(HELP_KEY, help.open ? '1' : '0');
+      } catch {
+        // Not persisted.
+      }
+    });
     this.applyLang();
     onLangChange(() => this.applyLang());
   }
@@ -58,7 +83,7 @@ export class Hud {
     const langBtn = $('lang');
     langBtn.textContent = t('langButton');
     langBtn.title = t('langButtonTitle');
-    $('help-list').innerHTML = t('help.items').map((item) => `<li>${item}</li>`).join('');
+    this.renderHelp();
     document.querySelectorAll<HTMLButtonElement>('#palette button').forEach((b) => {
       b.title = tr(DECOR[Number(b.dataset.kind)].name);
     });
@@ -68,6 +93,14 @@ export class Hud {
     this.gui?.destroy();
     this.buildGui();
     if (closed) [this.gui, ...this.gui.folders].forEach((f, i) => f.open(!closed[i]));
+  }
+
+  /** Fills the controls panel for the current input device. */
+  private renderHelp(): void {
+    const pad = this.padMode;
+    $('help-summary').textContent = `${t('help.summary')} ${pad ? '🎮' : '⌨️'} (${t(pad ? 'help.gamepadMode' : 'help.keyboardMode')})`;
+    const items = [...t(pad ? 'help.gamepad' : 'help.keyboard'), t('help.tip')];
+    $('help-list').innerHTML = items.map((item) => `<li>${item}</li>`).join('');
   }
 
   private buildGui(): void {
@@ -126,6 +159,10 @@ export class Hud {
     sand.add(settings, 'slumpRate', 5, 150, 1).name(t('gui.slumpRate'));
     sand.add(settings, 'erosion', 0, 3, 0.05).name(t('gui.erosion'));
     const simF = gui.addFolder(t('gui.sim'));
+    simF
+      .add(settings, 'timeScale', Object.fromEntries(TIME_SCALES.map((x) => [`×${x}`, x])))
+      .name(t('gui.timeScale'))
+      .listen();
     simF.add(settings, 'substeps', 1, 16, 1).name(t('gui.substeps'));
     simF.add({ reset: this.onReset }, 'reset').name(t('gui.reset'));
     const render = gui.addFolder(t('gui.render'));
@@ -136,7 +173,12 @@ export class Hud {
     for (const f of [sand, simF, render]) f.close();
   }
 
-  frame(dt: number, sim: Simulation): void {
+  frame(dt: number, sim: Simulation, padConnected: boolean): void {
+    if (padConnected !== this.padMode) {
+      this.padMode = padConnected;
+      document.body.classList.toggle('pad', padConnected);
+      this.renderHelp();
+    }
     this.fpsAcc += dt;
     this.fpsFrames++;
     if (this.fpsAcc > 0.5) {
@@ -153,7 +195,7 @@ export class Hud {
     const cap = molds[isMold(tl.tool) ? tl.tool : 'bucket'].cap;
 
     const inv = tl.inventory;
-    const pct = (x: number) => `${Math.round(x * 100)} %`;
+    const pct = (x: number) => `${Math.round(x * 100)}%`;
     const wetWord = (m: number) => t(m < 0.08 ? 'wet.dry' : m < 0.22 ? 'wet.damp' : m < 0.9 ? 'wet.wet' : 'wet.soaked');
     const sFrac = inv.shovelSand / toolSpec.shovelCap;
     $('shovel-bar').style.width = pct(Math.min(sFrac, 1));
@@ -178,6 +220,13 @@ export class Hud {
     const rising = tideRising(sim.tidePhase);
     const speed = settings.tidePaused ? t('hud.paused') : `×${settings.tideSpeed}`;
     $('tide-txt').textContent = `${sim.seaLevel >= 0 ? '+' : ''}${sim.seaLevel.toFixed(2)} m ${rising ? '↑' : '↓'} (${speed})`;
+
+    document.querySelectorAll<HTMLButtonElement>('#speed button').forEach((b) =>
+      b.classList.toggle('active', Number(b.dataset.scale) === settings.timeScale),
+    );
+    // The GPU can't keep up: show the speed actually reached.
+    const lagging = settings.timeScale > 1 && sim.speed < settings.timeScale * 0.85;
+    $('speed-lag').textContent = lagging ? t('hud.timeLag')(sim.speed.toFixed(1)) : '';
 
     const h = tl.hit;
     $('aim-txt').textContent = !h.valid

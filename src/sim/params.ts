@@ -2,7 +2,10 @@
 
 export const WORLD_SIZE = 16; // metres, square diorama
 export const GRAVITY = 9.81;
-export const MAX_SUBSTEPS = 16;
+/** Water steps per frame at most, time acceleration included (sizes the GPU parameter slots). */
+export const MAX_SUBSTEPS = 64;
+/** Time acceleration factors offered by the HUD (V / Shift+V, R3). */
+export const TIME_SCALES = [1, 2, 4, 8];
 /** Bottom of the diorama slab (the cut faces go down to here). */
 export const SLAB_BOTTOM = -1.4;
 /** Depth of the open sea at the far (+z) edge, at mean tide. */
@@ -40,7 +43,8 @@ export const settings = {
   slumpRate: 60,
   erosion: 1,
   // Simulation
-  substeps: 8, // maximum; the actual count follows the CFL limit
+  substeps: 8, // maximum at ×1; the actual count follows the CFL limit
+  timeScale: 1, // time acceleration: simulated seconds per real second (water, tide, drying, waves)
   // Rendu
   exposure: 1.0,
   bloom: 0.03,

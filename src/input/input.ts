@@ -43,6 +43,8 @@ export class Input {
   stickR: [number, number] = [0, 0];
   /** The gamepad was used more recently than the mouse: aim at the centre of the screen. */
   usingPad = false;
+  /** A gamepad is connected (browsers only report it after one of its buttons was pressed). */
+  padConnected = false;
   private keys = new Set<string>();
   private pressed = new Set<string>();
   private pad = new Set<string>();
@@ -118,6 +120,7 @@ export class Input {
   poll(): void {
     const gp = [...(navigator.getGamepads?.() ?? [])].filter((g): g is Gamepad => !!g?.connected);
     const g = gp.find((g) => g.mapping === 'standard') ?? gp[0];
+    this.padConnected = !!g;
     if (!g) {
       this.pad.clear();
       this.stickL = [0, 0];
