@@ -14,7 +14,9 @@ fn faceFlux(f0: f32, h: f32, H: f32, x: i32, y: i32) -> f32 {
   let hf = max(0.0, max(h, hn) - max(H, Hn));
   if (hf <= 1e-5) { return 0.0; }
   let damp = 1.0 / (1.0 + P.dt * (P.viscosity + P.friction / max(hf, 0.004)));
-  return max(0.0, (f0 + P.dt * P.g * hf * (h - hn)) * damp);
+  // The fixed time step only satisfies the CFL condition down to cflDepth: deeper water (a hole dug
+  // to the bedrock) keeps that conductance, so its waves are a little slow instead of blowing up.
+  return max(0.0, (f0 + P.dt * P.g * min(hf, P.cflDepth) * (h - hn)) * damp);
 }
 
 @compute @workgroup_size(16, 16)

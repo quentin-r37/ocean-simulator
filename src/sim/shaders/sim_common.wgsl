@@ -6,7 +6,7 @@ struct Params {
   depositK: f32, capacityK: f32, critVel: f32, evap: f32,
   moistDiff: f32, slumpRate: f32, dryTan: f32, wetTan: f32,
   compTan: f32, satTan: f32, seepK: f32, infilK: f32,
-  foamDecay: f32, waveTime: f32, cohH: f32, _p3: f32,
+  foamDecay: f32, waveTime: f32, cohH: f32, cflDepth: f32,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;

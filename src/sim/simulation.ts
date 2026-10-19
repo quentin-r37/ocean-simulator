@@ -15,6 +15,8 @@ import reduceWgsl from './shaders/reduce.wgsl?raw';
 const PARAM_BYTES = 128;
 const PARAM_STRIDE = 256;
 const deg = (a: number) => Math.tan((a * Math.PI) / 180);
+/** Water depth (m) the fixed time step is sized for (CFL). */
+const CFL_DEPTH = 1.15;
 /** Half-width of the tsunami hump (m), as TSUNAMI_WIDTH in waves.wgsl. */
 const TSUNAMI_WIDTH = 8;
 /** The crest starts this many widths beyond the open edge, so the sea rises smoothly. */
@@ -77,8 +79,9 @@ export class Simulation {
     this.params = createBuffer(device, PARAM_STRIDE * (MAX_SUBSTEPS + 1), UNIFORM, 'simParams');
     this.volumeReadback = new Readback(device, this.partialCount * 4, 2, 'volume');
 
-    // Time step bounded by the CFL condition of the deepest water (≈ 1.2 m with high tide + waves).
-    this.dtMax = (0.45 * this.dx) / Math.sqrt(GRAVITY * 1.15);
+    // Time step bounded by the CFL condition of the deepest water (≈ 1.2 m with high tide + waves);
+    // the flux pass caps the pipe conductance at that depth for anything dug deeper.
+    this.dtMax = (0.45 * this.dx) / Math.sqrt(GRAVITY * CFL_DEPTH);
 
     const mk = (code: string, label: string) => computePipeline(device, commonWgsl + wavesWgsl + code, label);
     this.pipelines = {
@@ -208,6 +211,7 @@ export class Simulation {
     f[28] = 0.35; // foam decay (1/s)
     f[29] = this.simTime;
     f[30] = s.cohesion;
+    f[31] = CFL_DEPTH;
     this.device.queue.writeBuffer(this.params, slot * PARAM_STRIDE, this.paramData);
   }
 
