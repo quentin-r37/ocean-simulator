@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 export interface GpuContext {
   device: GPUDevice;
   context: GPUCanvasContext;
@@ -17,12 +19,10 @@ export function showError(html: string): void {
 
 export async function initGpu(canvas: HTMLCanvasElement): Promise<GpuContext> {
   if (!('gpu' in navigator)) {
-    throw new Error(
-      "Ce navigateur ne prend pas en charge WebGPU.<br>Utilisez une version récente de Chrome, Edge ou Safari (macOS 26+).",
-    );
+    throw new Error(t('err.noWebgpu'));
   }
   const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-  if (!adapter) throw new Error('Aucun adaptateur WebGPU disponible sur cette machine.');
+  if (!adapter) throw new Error(t('err.noAdapter'));
 
   const device = await adapter.requestDevice({
     // Optional: GPU pass timings for profiling (?profile).
@@ -39,11 +39,11 @@ export async function initGpu(canvas: HTMLCanvasElement): Promise<GpuContext> {
   });
   device.lost.then((info) => {
     console.error('[WebGPU] device lost:', info.message);
-    if (info.reason !== 'destroyed') showError(`Le GPU a été perdu : ${info.message}<br>Rechargez la page.`);
+    if (info.reason !== 'destroyed') showError(t('err.deviceLost')(info.message));
   });
 
   const context = canvas.getContext('webgpu');
-  if (!context) throw new Error("Impossible d'obtenir un contexte WebGPU pour le canvas.");
+  if (!context) throw new Error(t('err.noContext'));
   const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
   context.configure({ device, format: canvasFormat, alphaMode: 'opaque' });
   return { device, context, canvasFormat, canvas };

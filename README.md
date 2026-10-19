@@ -11,6 +11,8 @@ npm run dev        # puis ouvrir l'URL affichée dans Chrome, Edge ou Safari (ma
 
 Le paramètre d'URL `?grid=256|384|512|768` fixe la résolution de la simulation. La valeur par défaut est 512, soit des cellules de 3,1 cm sur un plateau de 16 m × 16 m.
 
+L'interface existe en français et en anglais. La langue suit celle du navigateur ; le bouton en haut du panneau (ou « Langue » dans les réglages) la change à la volée, et le choix est mémorisé. `?lang=fr` ou `?lang=en` force une langue.
+
 ## Plages et ambiances
 
 - **Plage aléatoire** : `N`, ou le bouton du panneau « Plage et ambiance », génère une nouvelle plage à partir d'une graine. Selon la graine, on obtient une baie ou un cap, des dunes plus ou moins hautes, un lagon relié ou non à la mer, des mares, une barre de sable au large, des amas de rochers et parfois un ponton. La graine s'affiche dans le panneau et dans l'URL (`?seed=1234`), pour retrouver une plage ; `0` ramène la plage d'origine.

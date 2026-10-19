@@ -4,6 +4,8 @@
  * pattern function with a bit of randomness, so the melodies never repeat exactly.
  */
 
+import type { Text } from '../i18n';
+
 const mtof = (m: number) => 440 * 2 ** ((m - 69) / 12);
 const chance = (p: number) => Math.random() < p;
 const pick = <T>(a: T[]): T => a[Math.floor(Math.random() * a.length)];
@@ -27,7 +29,7 @@ interface Step {
 }
 
 interface Track {
-  name: string;
+  name: Text;
   bpm: number;
   /** Delay of the off 16ths, as a fraction of a 16th. */
   swing: number;
@@ -253,7 +255,7 @@ const PENTA_DM = [74, 77, 79, 81, 84, 86];
 
 export const TRACKS: Track[] = [
   {
-    name: 'Lo-fi au soleil',
+    name: { fr: 'Lo-fi au soleil', en: 'Lo-fi in the sun' },
     bpm: 76,
     swing: 0.3,
     barsPerChord: 1,
@@ -277,7 +279,7 @@ export const TRACKS: Track[] = [
     },
   },
   {
-    name: 'Coucher de soleil',
+    name: { fr: 'Coucher de soleil', en: 'Sunset' },
     bpm: 64,
     swing: 0,
     barsPerChord: 2,
@@ -298,7 +300,7 @@ export const TRACKS: Track[] = [
     },
   },
   {
-    name: 'Bossa des dunes',
+    name: { fr: 'Bossa des dunes', en: 'Dune bossa' },
     bpm: 132,
     swing: 0.08,
     barsPerChord: 1,
@@ -325,7 +327,7 @@ export const TRACKS: Track[] = [
     },
   },
   {
-    name: 'Marée basse (dub)',
+    name: { fr: 'Marée basse (dub)', en: 'Low tide (dub)' },
     bpm: 70,
     swing: 0.18,
     barsPerChord: 2,
@@ -362,7 +364,7 @@ function impulse(ctx: AudioContext, seconds: number): AudioBuffer {
 }
 
 export class Music {
-  readonly state = { on: true, volume: 0.45, track: TRACKS[0].name };
+  readonly state = { on: true, volume: 0.45, track: 0 };
   private ctx: AudioContext | null = null;
   private master!: GainNode;
   private tone!: BiquadFilterNode;
@@ -443,7 +445,7 @@ export class Music {
   select(index: number): void {
     this.trackIdx = index;
     const tr = TRACKS[index];
-    this.state.track = tr.name;
+    this.state.track = index;
     const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime;

@@ -5,6 +5,7 @@ import {
 import { baseHeight, initialHeight } from '../sim/terrainInit';
 import { BOULDER_VARIANTS, CLASSIC_LEVEL, level } from '../sim/level';
 import { WORLD_SIZE } from '../sim/params';
+import type { Text } from '../i18n';
 import { fbm, rng } from './noise';
 
 /** How an instance gets its height every frame. */
@@ -16,7 +17,7 @@ export enum YMode {
 
 export interface DecorKind {
   id: string;
-  name: string;
+  name: Text;
   icon: string;
   meshes: MeshData[]; // variants
   yMode: YMode;
@@ -29,21 +30,21 @@ export interface DecorKind {
 const variants = (f: (seed: number) => MeshData, n: number) => Array.from({ length: n }, (_, k) => f(k + 1));
 
 export const DECOR: DecorKind[] = [
-  { id: 'flagRed', name: 'Drapeau rouge', icon: '🚩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 0 },
-  { id: 'flagPurple', name: 'Drapeau violet', icon: '🟪', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 1 },
-  { id: 'flagGreen', name: 'Drapeau vert', icon: '🟩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 2 },
-  { id: 'flagYellow', name: 'Drapeau jaune', icon: '🟨', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 3 },
-  { id: 'shell', name: 'Coquillage', icon: '🐚', meshes: [shellMesh()], yMode: YMode.Ground, sway: 0, scale: [2.6, 3.6], placeable: true },
-  { id: 'starfish', name: 'Étoile de mer', icon: '⭐', meshes: [starfishMesh()], yMode: YMode.Ground, sway: 0, scale: [2.4, 3.2], placeable: true },
-  { id: 'rock', name: 'Rocher', icon: '🪨', meshes: variants((s) => rockMesh(s + 40), 4), yMode: YMode.Ground, sway: 0, scale: [0.15, 0.35], placeable: true },
-  { id: 'coral', name: 'Corail', icon: '🪸', meshes: variants(coralMesh, 4), yMode: YMode.Ground, sway: 0, scale: [1.4, 2.2], placeable: true },
-  { id: 'seaweed', name: 'Algue', icon: '🌿', meshes: variants(seaweedMesh, 3), yMode: YMode.Ground, sway: 0.6, scale: [1.2, 1.8], placeable: true },
-  { id: 'grass', name: 'Oyat', icon: '🌾', meshes: variants(grassMesh, 3), yMode: YMode.Ground, sway: 0.5, scale: [1.5, 2.3], placeable: true },
-  { id: 'bush', name: 'Buisson', icon: '🌳', meshes: variants(bushMesh, 3), yMode: YMode.Ground, sway: 0.12, scale: [1.6, 2.6], placeable: true },
-  { id: 'bottle', name: 'Bouteille', icon: '🍾', meshes: [bottleMesh()], yMode: YMode.Float, sway: 0, scale: [2.2, 2.6], placeable: true },
-  { id: 'buoy', name: 'Bouée', icon: '🔴', meshes: [buoyMesh()], yMode: YMode.Float, sway: 0, scale: [1.6, 1.8], placeable: true },
-  { id: 'boulder', name: 'Gros rocher', icon: '', meshes: variants(rockMesh, BOULDER_VARIANTS), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
-  { id: 'pier', name: 'Ponton', icon: '', meshes: [pierMesh()], yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
+  { id: 'flagRed', name: { fr: 'Drapeau rouge', en: 'Red flag' }, icon: '🚩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 0 },
+  { id: 'flagPurple', name: { fr: 'Drapeau violet', en: 'Purple flag' }, icon: '🟪', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 1 },
+  { id: 'flagGreen', name: { fr: 'Drapeau vert', en: 'Green flag' }, icon: '🟩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 2 },
+  { id: 'flagYellow', name: { fr: 'Drapeau jaune', en: 'Yellow flag' }, icon: '🟨', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 3 },
+  { id: 'shell', name: { fr: 'Coquillage', en: 'Shell' }, icon: '🐚', meshes: [shellMesh()], yMode: YMode.Ground, sway: 0, scale: [2.6, 3.6], placeable: true },
+  { id: 'starfish', name: { fr: 'Étoile de mer', en: 'Starfish' }, icon: '⭐', meshes: [starfishMesh()], yMode: YMode.Ground, sway: 0, scale: [2.4, 3.2], placeable: true },
+  { id: 'rock', name: { fr: 'Rocher', en: 'Rock' }, icon: '🪨', meshes: variants((s) => rockMesh(s + 40), 4), yMode: YMode.Ground, sway: 0, scale: [0.15, 0.35], placeable: true },
+  { id: 'coral', name: { fr: 'Corail', en: 'Coral' }, icon: '🪸', meshes: variants(coralMesh, 4), yMode: YMode.Ground, sway: 0, scale: [1.4, 2.2], placeable: true },
+  { id: 'seaweed', name: { fr: 'Algue', en: 'Seaweed' }, icon: '🌿', meshes: variants(seaweedMesh, 3), yMode: YMode.Ground, sway: 0.6, scale: [1.2, 1.8], placeable: true },
+  { id: 'grass', name: { fr: 'Oyat', en: 'Beach grass' }, icon: '🌾', meshes: variants(grassMesh, 3), yMode: YMode.Ground, sway: 0.5, scale: [1.5, 2.3], placeable: true },
+  { id: 'bush', name: { fr: 'Buisson', en: 'Bush' }, icon: '🌳', meshes: variants(bushMesh, 3), yMode: YMode.Ground, sway: 0.12, scale: [1.6, 2.6], placeable: true },
+  { id: 'bottle', name: { fr: 'Bouteille', en: 'Bottle' }, icon: '🍾', meshes: [bottleMesh()], yMode: YMode.Float, sway: 0, scale: [2.2, 2.6], placeable: true },
+  { id: 'buoy', name: { fr: 'Bouée', en: 'Buoy' }, icon: '🔴', meshes: [buoyMesh()], yMode: YMode.Float, sway: 0, scale: [1.6, 1.8], placeable: true },
+  { id: 'boulder', name: { fr: 'Gros rocher', en: 'Boulder' }, icon: '', meshes: variants(rockMesh, BOULDER_VARIANTS), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
+  { id: 'pier', name: { fr: 'Ponton', en: 'Pier' }, icon: '', meshes: [pierMesh()], yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
 ];
 
 export const kindIndex = (id: string) => DECOR.findIndex((k) => k.id === id);

@@ -1,5 +1,6 @@
 import { settings, Settings } from '../sim/params';
 import { smoothstep } from '../math';
+import type { Text } from '../i18n';
 
 /** Settings an ambience drives (sea state, light, weather). */
 type AmbienceKey =
@@ -8,41 +9,41 @@ type AmbienceKey =
 export type AmbienceValues = Pick<Settings, AmbienceKey>;
 
 export interface Ambience {
-  name: string;
+  name: Text;
   values: AmbienceValues;
 }
 
 export const AMBIENCES: Ambience[] = [
   {
-    name: 'Après-midi',
+    name: { fr: 'Après-midi', en: 'Afternoon' },
     values: { sunElevation: 52, sunAzimuth: -35, exposure: 1, bloom: 0.03, overcast: 0, wind: 1, waveAmp: 0.08, wavePeriod: 4.5, tideAmp: 0.1, tidePeriodMin: 12, evaporation: 0.5 },
   },
   {
-    name: 'Matin',
+    name: { fr: 'Matin', en: 'Morning' },
     values: { sunElevation: 11, sunAzimuth: -115, exposure: 1.35, bloom: 0.05, overcast: 0.12, wind: 0.5, waveAmp: 0.045, wavePeriod: 6, tideAmp: 0.1, tidePeriodMin: 12, evaporation: 0.2 },
   },
   {
-    name: 'Midi',
+    name: { fr: 'Midi', en: 'Noon' },
     values: { sunElevation: 78, sunAzimuth: -20, exposure: 0.9, bloom: 0.03, overcast: 0, wind: 0.9, waveAmp: 0.07, wavePeriod: 4.5, tideAmp: 0.1, tidePeriodMin: 12, evaporation: 0.95 },
   },
   {
-    name: 'Soir',
+    name: { fr: 'Soir', en: 'Evening' },
     values: { sunElevation: 5, sunAzimuth: 28, exposure: 1.45, bloom: 0.06, overcast: 0, wind: 0.7, waveAmp: 0.06, wavePeriod: 5.5, tideAmp: 0.1, tidePeriodMin: 12, evaporation: 0.3 },
   },
   {
-    name: 'Ciel couvert',
+    name: { fr: 'Ciel couvert', en: 'Overcast' },
     values: { sunElevation: 40, sunAzimuth: -40, exposure: 1.2, bloom: 0.02, overcast: 0.6, wind: 1.4, waveAmp: 0.12, wavePeriod: 5, tideAmp: 0.12, tidePeriodMin: 12, evaporation: 0.15 },
   },
   {
-    name: 'Tempête',
+    name: { fr: 'Tempête', en: 'Storm' },
     values: { sunElevation: 30, sunAzimuth: -60, exposure: 1.3, bloom: 0.02, overcast: 0.92, wind: 2.8, waveAmp: 0.3, wavePeriod: 7.5, tideAmp: 0.25, tidePeriodMin: 12, evaporation: 0.05 },
   },
   {
-    name: "Mer d'huile",
+    name: { fr: "Mer d'huile", en: 'Glassy sea' },
     values: { sunElevation: 42, sunAzimuth: 30, exposure: 1, bloom: 0.04, overcast: 0, wind: 0.25, waveAmp: 0.015, wavePeriod: 8, tideAmp: 0.08, tidePeriodMin: 12, evaporation: 0.6 },
   },
   {
-    name: 'Grande marée',
+    name: { fr: 'Grande marée', en: 'Spring tide' },
     values: { sunElevation: 35, sunAzimuth: -50, exposure: 1.05, bloom: 0.03, overcast: 0.2, wind: 1.2, waveAmp: 0.1, wavePeriod: 5, tideAmp: 0.42, tidePeriodMin: 8, evaporation: 0.4 },
   },
 ];
