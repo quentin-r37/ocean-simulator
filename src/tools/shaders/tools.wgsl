@@ -3,7 +3,7 @@
 // so every transfer between the terrain and the tool inventory is exactly volume-conserving.
 struct ToolU {
   mode: u32, n: u32, frame: u32, moldType: u32,
-  dx: f32, dt: f32, seaLevel: f32, radius: f32,
+  dx: f32, dt: f32, waterTable: f32, radius: f32,
   shovelCap: f32, fillCap: f32, rBase: f32, rTop: f32,
   moldH: f32, merlon: f32, halfLen: f32, halfWBase: f32,
   halfWTop: f32, moldAngle: f32, targetH: f32, digRate: f32,
@@ -146,7 +146,7 @@ fn takeSand(li: u32, R: f32, budget: f32, floor: f32, blade: bool) -> vec2f {
         tm += take * g.z;
         g.y -= take;
         // Freshly exposed sand below the dry crust is damper (water table below).
-        g.z = max(g.z, moistEq(g.x + g.y - U.seaLevel));
+        g.z = max(g.z, moistEq(g.x + g.y - U.waterTable));
         ground[i] = g;
         var w = water[i];
         if (w.x > 0.001) { w.x += take; water[i] = w; }

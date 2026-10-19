@@ -7,6 +7,7 @@ struct Params {
   moistDiff: f32, slumpRate: f32, dryTan: f32, wetTan: f32,
   compTan: f32, satTan: f32, seepK: f32, infilK: f32,
   foamDecay: f32, waveTime: f32, cohH: f32, cflDepth: f32,
+  waterTable: f32, drainK: f32, surfEvap: f32, _pad: f32,
 }
 
 @group(0) @binding(0) var<uniform> P: Params;

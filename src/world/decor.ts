@@ -25,7 +25,11 @@ export interface DecorKind {
   scale: [number, number];
   placeable: boolean;
   colorIndex?: number; // flags
+  stone?: boolean; // wet / algae-covered around the waterline
 }
+
+/** Per-instance material slot: flag colour index, -2 for stone, -1 otherwise. */
+export const materialOf = (k: DecorKind) => k.colorIndex ?? (k.stone ? -2 : -1);
 
 const variants = (f: (seed: number) => MeshData, n: number) => Array.from({ length: n }, (_, k) => f(k + 1));
 
@@ -36,14 +40,14 @@ export const DECOR: DecorKind[] = [
   { id: 'flagYellow', name: { fr: 'Drapeau jaune', en: 'Yellow flag' }, icon: '🟨', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 3 },
   { id: 'shell', name: { fr: 'Coquillage', en: 'Shell' }, icon: '🐚', meshes: [shellMesh()], yMode: YMode.Ground, sway: 0, scale: [2.6, 3.6], placeable: true },
   { id: 'starfish', name: { fr: 'Étoile de mer', en: 'Starfish' }, icon: '⭐', meshes: [starfishMesh()], yMode: YMode.Ground, sway: 0, scale: [2.4, 3.2], placeable: true },
-  { id: 'rock', name: { fr: 'Rocher', en: 'Rock' }, icon: '🪨', meshes: variants((s) => rockMesh(s + 40), 4), yMode: YMode.Ground, sway: 0, scale: [0.15, 0.35], placeable: true },
+  { id: 'rock', name: { fr: 'Rocher', en: 'Rock' }, icon: '🪨', meshes: variants((s) => rockMesh(s + 40), 4), yMode: YMode.Ground, sway: 0, scale: [0.15, 0.35], placeable: true, stone: true },
   { id: 'coral', name: { fr: 'Corail', en: 'Coral' }, icon: '🪸', meshes: variants(coralMesh, 4), yMode: YMode.Ground, sway: 0, scale: [1.4, 2.2], placeable: true },
   { id: 'seaweed', name: { fr: 'Algue', en: 'Seaweed' }, icon: '🌿', meshes: variants(seaweedMesh, 3), yMode: YMode.Ground, sway: 0.6, scale: [1.2, 1.8], placeable: true },
   { id: 'grass', name: { fr: 'Oyat', en: 'Beach grass' }, icon: '🌾', meshes: variants(grassMesh, 3), yMode: YMode.Ground, sway: 0.5, scale: [1.5, 2.3], placeable: true },
   { id: 'bush', name: { fr: 'Buisson', en: 'Bush' }, icon: '🌳', meshes: variants(bushMesh, 3), yMode: YMode.Ground, sway: 0.12, scale: [1.6, 2.6], placeable: true },
   { id: 'bottle', name: { fr: 'Bouteille', en: 'Bottle' }, icon: '🍾', meshes: [bottleMesh()], yMode: YMode.Float, sway: 0, scale: [2.2, 2.6], placeable: true },
   { id: 'buoy', name: { fr: 'Bouée', en: 'Buoy' }, icon: '🔴', meshes: [buoyMesh()], yMode: YMode.Float, sway: 0, scale: [1.6, 1.8], placeable: true },
-  { id: 'boulder', name: { fr: 'Gros rocher', en: 'Boulder' }, icon: '', meshes: variants(rockMesh, BOULDER_VARIANTS), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
+  { id: 'boulder', name: { fr: 'Gros rocher', en: 'Boulder' }, icon: '', meshes: variants(rockMesh, BOULDER_VARIANTS), yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false, stone: true },
   { id: 'pier', name: { fr: 'Ponton', en: 'Pier' }, icon: '', meshes: [pierMesh()], yMode: YMode.Absolute, sway: 0, scale: [1, 1], placeable: false },
 ];
 
@@ -106,7 +110,7 @@ export class DecorSet {
 
   /**
    * Packs instances sorted by (kind, variant) and returns the draw ranges.
-   * Layout per instance: (x, y, z, rot), (sx, sy, sz, seed), (kind, variant, yMode, sway).
+   * Layout per instance: (x, y, z, rot), (sx, sy, sz, seed), (kind, material, yMode, sway).
    */
   pack(): { data: Float32Array; ranges: { kind: number; variant: number; first: number; count: number }[] } {
     const sorted = [...this.instances].sort((a, b) => a.kind - b.kind || a.variant - b.variant);
@@ -114,7 +118,7 @@ export class DecorSet {
     const ranges: { kind: number; variant: number; first: number; count: number }[] = [];
     sorted.forEach((it, i) => {
       const k = DECOR[it.kind];
-      data.set([it.x, it.y, it.z, it.rot, it.sx, it.sy, it.sz, it.seed, it.kind, k.colorIndex ?? -1, k.yMode, k.sway], i * INSTANCE_FLOATS);
+      data.set([it.x, it.y, it.z, it.rot, it.sx, it.sy, it.sz, it.seed, it.kind, materialOf(k), k.yMode, k.sway], i * INSTANCE_FLOATS);
       const last = ranges[ranges.length - 1];
       if (last && last.kind === it.kind && last.variant === it.variant) last.count++;
       else ranges.push({ kind: it.kind, variant: it.variant, first: i, count: 1 });
@@ -138,11 +142,11 @@ function generateDecor(seaLevel: number): DecorInstance[] {
   const nearRock = (x: number, z: number, pad: number) =>
     rocks.some((rk) => Math.hypot((x - rk.x) / (rk.rx + pad), (z - rk.z) / (rk.rz + pad)) < 1);
 
-  // Boulders (their footprint is baked into the bedrock).
+  // Boulders (their footprint is baked into the bedrock; the mesh is enlarged a little to cover it).
   rocks.forEach((rk) => {
     out.push({
       kind: kindIndex('boulder'), variant: (rk.seed - 1) % BOULDER_VARIANTS, x: rk.x, y: baseHeight(rk.x, rk.z) - 0.17, z: rk.z,
-      rot: rk.rot, sx: rk.rx * 1.07, sy: rk.h + 0.2, sz: rk.rz * 1.07, seed: r(),
+      rot: rk.rot, sx: rk.rx * 1.14, sy: (rk.h + 0.2) * 1.08, sz: rk.rz * 1.14, seed: r(),
     });
   });
 

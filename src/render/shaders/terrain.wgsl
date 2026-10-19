@@ -254,7 +254,7 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   alb = mix(alb, vec3f(0.2, 0.28, 0.16), weed * 0.6);
   // Bare boulder surface.
   let bare = 1.0 - smoothstep(0.0, 0.02, in.sand);
-  alb = mix(alb, vec3f(0.3, 0.28, 0.25) * (0.85 + 0.3 * mott), bare);
+  alb = mix(alb, vec3f(0.2, 0.18, 0.155) * (0.85 + 0.3 * mott), bare);
 
   // ----- Lighting -----
   let shadow = shadowAt(wp, in.nrm);

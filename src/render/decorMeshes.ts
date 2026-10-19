@@ -8,24 +8,77 @@ export const CLOTH: Vec3 = [1, 0, 1];
 
 const mixc = (a: Vec3, b: Vec3, t: number): Vec3 => v3.lerp(a, b, t);
 
-/** Lumpy boulder: base flat at y=0, top at y=1, radius 1. */
+/** Polynomial smooth minimum: like min(a, b) but blended over a width `k`. */
+const smin = (a: number, b: number, k: number) => {
+  const h = Math.min(1, Math.max(0, 0.5 + (0.5 * (b - a)) / k));
+  return b + (a - b) * h - k * h * (1 - h);
+};
+
+/**
+ * Worn boulder: a noisy sphere flattened by a few random planes whose edges are smoothed off,
+ * so it reads as broad faces with rounded shoulders. Base flat at y=0, top at y~0.85, radius 0.8-0.95.
+ */
 export function rockMesh(seed: number): MeshData {
   const b = new Builder();
   const r = rng(seed * 7919);
   const off = r() * 100;
+  // Cutting planes: mostly around the flanks, one shaving the top.
+  const planes: { n: Vec3; o: number }[] = [];
+  const cuts = 5 + Math.floor(r() * 3);
+  for (let k = 0; k < cuts; k++) {
+    const a = r() * Math.PI * 2;
+    const el = k < 1 ? 1.0 + r() * 0.45 : (r() - 0.35) * 1.3;
+    planes.push({ n: [Math.cos(a) * Math.cos(el), Math.sin(el), Math.sin(a) * Math.cos(el)], o: 0.84 + r() * 0.1 });
+  }
   const shape = (p: Vec3): Vec3 => {
-    const d = 1 + 0.28 * fbm(p[0] * 1.3 + off, p[2] * 1.3 + p[1] * 0.7, seed, 3) + 0.08 * fbm(p[0] * 4 + off, p[1] * 4, seed + 3, 2);
+    let d = 1.06 + 0.14 * fbm(p[0] * 1.1 + off, p[2] * 1.1 + p[1] * 0.8, seed, 2);
+    for (const pl of planes) {
+      const c = v3.dot(p, pl.n);
+      if (c > 1e-3) d = smin(d, pl.o / c, 0.14);
+    }
     const q = v3.scale(p, d);
     // Flatten the base, squash slightly, then map y to [0, 1].
     const y = Math.max(q[1], -0.25);
     return [q[0], (y + 0.25) / 1.3, q[2]];
   };
-  const dark: Vec3 = [0.05, 0.045, 0.04];
-  const light: Vec3 = [0.13, 0.115, 0.1];
-  for (const [a, c, d] of icosphere(2)) {
-    const pa = shape(a), pc = shape(c), pd = shape(d);
-    b.flatTri(pa, pc, pd, (p) => mixc(dark, light, Math.min(1, Math.max(0, p[1] * 0.9 + 0.15 * fbm(p[0] * 3, p[2] * 3, 5)))));
+  // Weathered granite: warm grey, tilted strata, paler sun-bleached tops with lichen spots.
+  const dark: Vec3 = [0.075, 0.068, 0.062];
+  const warm: Vec3 = [0.15, 0.13, 0.105];
+  const lichen: Vec3 = [0.22, 0.16, 0.07];
+  const tilt = v3.norm([r() - 0.5, 2.5, r() - 0.5]);
+  const strata = 9 + r() * 6;
+  // Shared vertices with area-weighted normals: smooth shoulders, the cut faces stay flat.
+  const ids = new Map<string, number>();
+  const pos: Vec3[] = [];
+  const nrm: Vec3[] = [];
+  const tris: number[][] = [];
+  const vid = (p: Vec3) => {
+    const key = p.map((x) => x.toFixed(5)).join(',');
+    let i = ids.get(key);
+    if (i === undefined) {
+      i = pos.length;
+      ids.set(key, i);
+      pos.push(shape(p));
+      nrm.push([0, 0, 0]);
+    }
+    return i;
+  };
+  for (const tri of icosphere(3)) {
+    const t = tri.map(vid);
+    const fn = v3.cross(v3.sub(pos[t[1]], pos[t[0]]), v3.sub(pos[t[2]], pos[t[0]]));
+    for (const i of t) nrm[i] = v3.add(nrm[i], fn);
+    tris.push(t);
   }
+  const out = pos.map((p, i) => {
+    const n = v3.norm(nrm[i]);
+    const tone = 0.5 + 0.6 * fbm(p[0] * 2.2 + off, p[2] * 2.2 + p[1] * 1.7, seed + 7, 3);
+    const band = Math.sin(v3.dot(p, tilt) * strata + 2 * fbm(p[0] * 3, p[2] * 3, seed + 9, 2));
+    let col = mixc(dark, warm, Math.min(1, Math.max(0, tone + 0.18 * band)));
+    col = v3.scale(col, 0.8 + 0.35 * Math.min(1, p[1] * 1.4));
+    const lich = Math.max(0, n[1] - 0.3) * Math.max(0, fbm(p[0] * 9 + off, p[2] * 9, seed + 13, 2) - 0.22) * 6;
+    return b.vert(p, n, mixc(col, lichen, Math.min(0.45, lich)));
+  });
+  for (const [i, j, k] of tris) b.tri(out[i], out[j], out[k]);
   return b.build();
 }
 

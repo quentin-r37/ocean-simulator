@@ -6,7 +6,7 @@ import type { Simulation } from '../sim/simulation';
 import { settings } from '../sim/params';
 import { DrawItem, toolMeshes, ToolMeshId } from './toolMesh';
 import type { MeshData } from './meshBuilder';
-import { DECOR, DecorSet, INSTANCE_FLOATS, MAX_DECOR } from '../world/decor';
+import { DECOR, DecorSet, INSTANCE_FLOATS, MAX_DECOR, materialOf } from '../world/decor';
 
 import commonWgsl from './shaders/common.wgsl?raw';
 import lightingWgsl from './shaders/lighting.wgsl?raw';
@@ -440,7 +440,7 @@ export class Renderer {
     if (pv) {
       const k = DECOR[pv.kind];
       const s = k.scale[0] + (k.scale[1] - k.scale[0]) * pv.seed;
-      slot.set([pv.x, 0, pv.z, pv.seed * 6.2831853 * 13.7, s, s, s, pv.seed, pv.kind, k.colorIndex ?? -1, k.yMode, k.sway]);
+      slot.set([pv.x, 0, pv.z, pv.seed * 6.2831853 * 13.7, s, s, s, pv.seed, pv.kind, materialOf(k), k.yMode, k.sway]);
     }
     q.writeBuffer(this.decorInst, (MAX_DECOR - 1) * INSTANCE_FLOATS * 4, slot);
   }

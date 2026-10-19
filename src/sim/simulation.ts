@@ -12,7 +12,7 @@ import slumpOutWgsl from './shaders/slump_out.wgsl?raw';
 import slumpApplyWgsl from './shaders/slump_apply.wgsl?raw';
 import reduceWgsl from './shaders/reduce.wgsl?raw';
 
-const PARAM_BYTES = 128;
+const PARAM_BYTES = 144;
 const PARAM_STRIDE = 256;
 const deg = (a: number) => Math.tan((a * Math.PI) / 180);
 /** Water depth (m) the fixed time step is sized for (CFL). */
@@ -21,6 +21,12 @@ const CFL_DEPTH = 1.15;
 const TSUNAMI_WIDTH = 8;
 /** The crest starts this many widths beyond the open edge, so the sea rises smoothly. */
 const TSUNAMI_LEAD = 2.5;
+/** Time constants of the water table, as fractions of the tide period: it rises with the flood
+ *  almost at once (the swash soaks in) but drains out of the beach well behind the ebb. */
+const TABLE_RISE = 0.02;
+const TABLE_FALL = 0.12;
+/** Evaporation of standing water at full drying (m/s), sped up like the drying of the sand. */
+const SURFACE_EVAP = 1e-4;
 
 /**
  * GPU beach simulation on an n×n grid.
@@ -53,6 +59,8 @@ export class Simulation {
   /** Position in the tide cycle (cycles), so the cycle length can change without a jump. */
   tidePhase = 0;
   seaLevel = 0;
+  /** Height of the water table under the beach: lags the sea level on the ebb. */
+  waterTable = 0;
   frame = 0;
   dtMax: number;
   sandVolume = 0;
@@ -139,6 +147,7 @@ export class Simulation {
     this.tidePhase = 0;
     this.tsunami = null;
     this.seaLevel = tideLevel(0);
+    this.waterTable = this.seaLevel;
     const { ground, water } = buildBeach(this.n, this.seaLevel);
     const q = this.device.queue;
     q.writeBuffer(this.ground[0], 0, ground);
@@ -212,6 +221,9 @@ export class Simulation {
     f[29] = this.simTime;
     f[30] = s.cohesion;
     f[31] = CFL_DEPTH;
+    f[32] = this.waterTable;
+    f[33] = 1 / (TABLE_FALL * settings.tidePeriodMin * 60); // drainage of perched water (1/s)
+    f[34] = SURFACE_EVAP * s.evaporation;
     this.device.queue.writeBuffer(this.params, slot * PARAM_STRIDE, this.paramData);
   }
 
@@ -241,6 +253,8 @@ export class Simulation {
       this.simTime += dt;
       if (!settings.tidePaused) this.tidePhase += (dt * settings.tideSpeed) / (settings.tidePeriodMin * 60);
       this.seaLevel = tideLevel(this.tidePhase);
+      const lag = (this.seaLevel > this.waterTable ? TABLE_RISE : TABLE_FALL) * settings.tidePeriodMin * 60;
+      this.waterTable += (this.seaLevel - this.waterTable) * Math.min(dt / lag, 1);
       this.writeParams(s, dt);
       const g = this.groups[s];
       run(p.flux, g[0]);

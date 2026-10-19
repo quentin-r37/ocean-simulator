@@ -2,7 +2,7 @@
 struct Inst {
   a: vec4f, // x, y (absolute or offset), z, rotation
   b: vec4f, // scale xyz, seed
-  c: vec4f, // kind, flag colour index, y mode, sway
+  c: vec4f, // kind, material (flag colour index, -2 stone), y mode, sway
 }
 @group(0) @binding(1) var<storage, read> ground: array<vec4f>;
 @group(0) @binding(2) var<storage, read> water: array<vec4f>;
@@ -19,6 +19,7 @@ struct VOut {
   @location(1) nrm: vec3f,
   @location(2) col: vec3f,
   @location(3) preview: f32,
+  @location(4) stone: f32,
 }
 
 fn flagColor(i: f32) -> vec3f {
@@ -75,6 +76,7 @@ fn vs_main(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   if (cloth) { col = flagColor(it.c.y); }
   o.col = col;
   o.preview = select(0.0, 1.0, ii == arrayLength(&inst) - 1u);
+  o.stone = select(0.0, 1.0, it.c.y < -1.5);
   return o;
 }
 
@@ -87,10 +89,27 @@ fn fs_main(in: VOut) -> @location(0) vec4f {
   let Ld = normalize(cam.sunDir.xyz);
   let sun = sky.sun.rgb;
   let shadow = shadowAt(in.wp, n);
+  var alb = in.col;
+  var wet = 0.0;
+  if (in.stone > 0.5) {
+    // Waterline on rocks: dark wet band up to the swash, green weed and barnacles just below
+    // the surface, a dimmer greenish tint deeper down.
+    let h = in.wp.y - cam.sunDir.w;
+    let wob = fbm(in.wp.xz * 7.0 + in.wp.y * 3.0) * 0.06;
+    let reach = 0.04 + cam.waves.x * 1.5;
+    wet = 1.0 - smoothstep(reach * 0.5, reach + 0.06, h + wob);
+    let weed = smoothstep(-0.3, -0.12, h + wob) * (1.0 - smoothstep(-0.02, 0.05, h + wob * 1.5));
+    let deep = 1.0 - smoothstep(-0.4, -0.15, h);
+    alb = mix(alb, alb * vec3f(0.55, 0.52, 0.48), wet);
+    alb = mix(alb, vec3f(0.05, 0.075, 0.03), weed * 0.8 * smoothstep(-0.2, 0.3, vnoise(in.wp.xz * 18.0 + in.wp.y * 9.0)));
+    let barn = smoothstep(0.55, 0.75, vnoise(in.wp.xz * 70.0 + in.wp.y * 41.0)) * weed;
+    alb = mix(alb, vec3f(0.3, 0.29, 0.26), barn * 0.7);
+    alb = mix(alb, alb * vec3f(0.7, 0.85, 0.75), deep);
+  }
   // Wrapped diffuse keeps the stylised look soft.
   let nl = clamp((dot(n, Ld) + 0.25) / 1.25, 0.0, 1.0);
-  var col = in.col / PI * (sun * nl * shadow + ambientIrr(sky, n) * 1.15);
-  col += sun * ggx(n, V, Ld, 0.45) * max(dot(n, Ld), 0.0) * shadow * 0.04;
+  var col = alb / PI * (sun * nl * shadow + ambientIrr(sky, n) * 1.15);
+  col += sun * ggx(n, V, Ld, mix(0.45, 0.2, wet)) * max(dot(n, Ld), 0.0) * shadow * mix(0.04, 0.25, wet);
   if (in.preview > 0.5) {
     col = mix(col, vec3f(1.2, 1.1, 0.8), 0.25 + 0.15 * sin(cam.camPos.w * 6.0));
   }

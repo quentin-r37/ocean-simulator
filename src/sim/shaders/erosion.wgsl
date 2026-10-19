@@ -93,7 +93,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
   // --- Moisture ---
   let Hn = g.x + S;
-  let above = Hn - P.seaLevel;
+  let above = Hn - P.waterTable;
   if (d > 0.004) {
     M = min(1.0, M + 3.0 * P.dt);
   } else {
@@ -111,16 +111,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let lap = gl.z + gr.z + gb.z + gt.z - 4.0 * g.z;
   M = clamp(M + P.moistDiff * P.dt / (P.dx * P.dx) * lap, 0.0, 1.0);
 
-  // --- Infiltration of perched water and seepage from the water table ---
-  if (d > 0.0 && Hn > P.seaLevel + 0.005) {
+  // --- Infiltration of perched water, drainage of pools into the water table, seepage from it ---
+  let surf = Hn + d;
+  if (d > 0.0 && Hn > P.waterTable + 0.005) {
     let inf = min(d, P.infilK * (1.03 - M) * P.dt);
     d -= inf;
     M = min(1.0, M + inf * 25.0);
+  } else if (surf > P.seaLevel) {
+    // A pool sitting on saturated sand drains through the beach towards the sea, as slowly as
+    // the water table itself, until its floor comes out above the table and it soaks in.
+    d -= min(d, (surf - P.seaLevel) * min(P.drainK * P.dt, 1.0));
   }
-  if (Hn < P.seaLevel - 0.004) {
-    let surf = Hn + d;
-    if (surf < P.seaLevel) { d += (P.seaLevel - surf) * min(P.seepK * P.dt, 1.0); }
+  if (Hn < P.seaLevel - 0.004 && surf < P.seaLevel) {
+    d += (P.seaLevel - surf) * min(P.seepK * P.dt, 1.0);
   }
+  d = max(d - P.surfEvap * P.dt, 0.0);
 
   // --- Waves against the faces of steep columns: soaked and battered, the packing goes, the
   // cohesion with it, and the column slumps into the water (castles melt from the base). ---

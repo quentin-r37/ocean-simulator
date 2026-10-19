@@ -313,7 +313,7 @@ export class Tools {
     tu[3] = MOLD_TYPE[moldKind];
     tf[4] = this.sim.dx;
     tf[5] = dt;
-    tf[6] = this.sim.seaLevel;
+    tf[6] = this.sim.waterTable;
     const giant = this.tool === 'giant';
     tf[7] = this.mode === Mode.Fill ? (giant ? toolSpec.giantFillRadius : toolSpec.fillRadius) : this.cursorRadius(alt, shift);
     tf[8] = toolSpec.shovelCap;
