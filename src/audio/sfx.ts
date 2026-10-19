@@ -16,8 +16,11 @@ export class Sfx {
   private scrapeFilter!: BiquadFilterNode;
   private smooth!: AudioBuffer;
   private waterGain!: GainNode;
+  private waterHP!: BiquadFilterNode;
   private waterLP!: BiquadFilterNode;
   private waterPeak!: BiquadFilterNode;
+  private waterPeak2!: BiquadFilterNode;
+  private grainBus!: AudioNode;
   private lastT = 0;
   private prevFlow: Flow = 'none';
   private prevMode = Mode.None;
@@ -55,24 +58,41 @@ export class Sfx {
     src.connect(this.scrapeFilter).connect(this.scrapeGain).connect(this.master);
     src.start();
 
-    // Water stream: smooth noise (no crackles), low-passed, with a resonant peak standing in for
-    // the bucket's air cavity.
+    // Water stream: smooth noise (no crackles), band-limited, with resonant peaks (the bucket's air
+    // cavity when filling, the splash formants when pouring).
     this.smooth = ctx.createBuffer(1, len, ctx.sampleRate);
     const w = this.smooth.getChannelData(0);
     for (let i = 0; i < len; i++) w[i] = Math.random() * 2 - 1;
     const wsrc = ctx.createBufferSource();
     wsrc.buffer = this.smooth;
     wsrc.loop = true;
+    this.waterHP = ctx.createBiquadFilter();
+    this.waterHP.type = 'highpass';
+    this.waterHP.Q.value = -3; // dB: Butterworth
     this.waterLP = ctx.createBiquadFilter();
     this.waterLP.type = 'lowpass';
-    this.waterLP.Q.value = 0.5;
+    this.waterLP.Q.value = -6;
     this.waterPeak = ctx.createBiquadFilter();
     this.waterPeak.type = 'peaking';
-    this.waterPeak.Q.value = 4;
+    this.waterPeak2 = ctx.createBiquadFilter();
+    this.waterPeak2.type = 'peaking';
+    this.waterPeak2.frequency.value = 1300;
+    this.waterPeak2.Q.value = 1.2;
     this.waterGain = ctx.createGain();
     this.waterGain.gain.value = 0;
-    wsrc.connect(this.waterLP).connect(this.waterPeak).connect(this.waterGain).connect(this.master);
+    wsrc.connect(this.waterHP).connect(this.waterLP).connect(this.waterPeak).connect(this.waterPeak2);
+    this.waterPeak2.connect(this.waterGain).connect(this.master);
     wsrc.start();
+    // Splash grains go through a steep high-pass: a pour on the ground has almost nothing below ~800 Hz.
+    const ghp1 = ctx.createBiquadFilter();
+    const ghp2 = ctx.createBiquadFilter();
+    for (const f of [ghp1, ghp2]) {
+      f.type = 'highpass';
+      f.frequency.value = 850;
+      f.Q.value = -3;
+    }
+    ghp1.connect(ghp2).connect(this.master);
+    this.grainBus = ghp1;
     this.lastT = ctx.currentTime;
   }
 
@@ -157,16 +177,21 @@ export class Sfx {
 
   /**
    * Water voice. Filling: turbulent stream plus bubbles, with a cavity resonance that climbs as the
-   * bucket fills. Pouring: a granular splash (many tiny noise impacts) over a low body, wetter and
-   * more bubbly when it lands in a puddle, thinning to a trickle as the bucket empties.
+   * bucket fills. Pouring (tuned against a recording of watering soil): a dense granular splash of
+   * ringing 1–4 kHz droplet impacts and small bubbles over a thin high-passed bed, more bubbly when
+   * it lands in a puddle, thinning to a trickle as the bucket empties.
    */
   private water(flow: Flow, frac: number, wet: number, dt: number): void {
     const ctx = this.ctx!;
     const t = ctx.currentTime;
     let level = 0;
-    let reso = 400;
-    let peak = 0;
+    let hp = 60;
     let cutoff = 1200;
+    let reso = 400;
+    let q = 4;
+    let peak = 0;
+    let peak2 = 0;
+    let flutter = 0.7;
     let bubbles = 0;
     let fLo = 400;
     let fHi = 1600;
@@ -181,35 +206,33 @@ export class Sfx {
       fLo = reso * 0.9;
       fHi = reso * 2.4;
     } else if (flow === 'pour') {
-      // Body: dull, low thud of the water mass; the splash itself comes from the grains.
       const thick = Math.min(1, 0.25 + frac * 1.5);
-      reso = 220;
-      peak = 4;
-      level = 0.35 * thick;
-      cutoff = 500 + 400 * thick;
-      grains = 60 + 140 * thick;
-      bubbles = (4 + 22 * wet) * thick;
-      fLo = 600;
-      fHi = 1500;
+      level = 0.08 * thick;
+      hp = 1000;
+      cutoff = 6500;
+      reso = 3200;
+      q = 0.7;
+      peak = 5;
+      peak2 = 8;
+      flutter = 0.4;
+      grains = 240 * (0.4 + 0.6 * thick);
+      bubbles = (60 + 20 * wet) * thick;
+      fLo = 1000;
+      fHi = 3500;
     }
     // Random amplitude flutter reads as turbulence rather than a steady hiss.
-    this.waterGain.gain.setTargetAtTime(level * (0.65 + 0.7 * Math.random()), t, level > 0 ? 0.035 : 0.12);
+    this.waterGain.gain.setTargetAtTime(level * (1 - flutter / 2 + flutter * Math.random()), t, level > 0 ? 0.035 : 0.12);
+    this.waterHP.frequency.setTargetAtTime(hp, t, 0.03);
     this.waterLP.frequency.setTargetAtTime(cutoff, t, 0.05);
     this.waterPeak.frequency.setTargetAtTime(reso, t, 0.06);
+    this.waterPeak.Q.setTargetAtTime(q, t, 0.03);
     this.waterPeak.gain.setTargetAtTime(peak, t, 0.03);
+    this.waterPeak2.gain.setTargetAtTime(peak2, t, 0.03);
 
     for (let k = this.count(bubbles * dt); k > 0; k--) {
-      this.bubble(t + 0.015 + Math.random() * dt, fLo * (fHi / fLo) ** Math.random(), 0.04 + 0.08 * Math.random());
+      this.bubble(t + 0.015 + Math.random() * dt, fLo * (fHi / fLo) ** Math.random(), flow === 'pour' ? 0.08 + 0.1 * Math.random() : 0.04 + 0.08 * Math.random());
     }
-    if (grains > 0) {
-      // A thin trickle sounds higher and lighter; landing on dry sand is duller than in a puddle.
-      const lo = 350 + 900 * (1 - frac);
-      const hi = 2200 + 2500 * wet;
-      for (let k = this.count(grains * dt); k > 0; k--) {
-        const r = Math.random();
-        this.grain(t + 0.015 + Math.random() * dt, lo * (hi / lo) ** Math.random(), 0.35 + 1.1 * r * r, 0.008 + 0.03 * Math.random());
-      }
-    }
+    for (let k = this.count(grains * dt); k > 0; k--) this.splashGrain(t + 0.015 + Math.random() * dt, 1);
 
     if (flow !== this.prevFlow) {
       if (flow === 'fill') {
@@ -218,8 +241,8 @@ export class Sfx {
         this.bubble(t + 0.02, 150, 0.35, 0.16);
         this.bubble(t + 0.07, 230, 0.2, 0.1);
       } else if (flow === 'pour') {
-        // First mass of water slapping the ground.
-        this.burst(0.35, 700 + 900 * wet, 0.6, 0.02, this.smooth);
+        // First mass of water slapping the ground: a short flurry of louder impacts.
+        for (let i = 0; i < 30; i++) this.splashGrain(t + 0.015 + 0.15 * Math.random() ** 1.5, 1.6);
       } else if (this.prevFlow !== 'none') {
         this.drips(this.prevFlow === 'pour' ? 7 : 5, this.prevFlow === 'pour' ? 0.1 : 0.09);
       }
@@ -232,22 +255,28 @@ export class Sfx {
     return Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
   }
 
-  /** A tiny band-passed noise click: one droplet impact of a splash. */
-  private grain(at: number, f: number, amp: number, dur: number): void {
+  /**
+   * One droplet impact: a few ms of narrow band-passed noise, resonant enough to ring like a drop. Frequencies cluster around the two formants
+   * of a real pour (1.0–1.65 kHz and 2.5–4 kHz); amplitudes are mostly even with a few loud ones.
+   */
+  private splashGrain(at: number, gain: number): void {
     const ctx = this.ctx!;
+    const [lo, hi] = Math.random() < 0.65 ? [1000, 1650] : [2500, 4000];
+    const dec = 0.003 + 0.009 * Math.random();
+    const amp = gain * (0.8 + 3.2 * Math.random() ** 2);
     const src = ctx.createBufferSource();
     src.buffer = this.smooth;
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.value = f;
-    bp.Q.value = 1.4;
+    bp.frequency.value = lo * (hi / lo) ** Math.random();
+    bp.Q.value = 8;
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, at);
-    g.gain.linearRampToValueAtTime(amp, at + 0.002);
-    g.gain.exponentialRampToValueAtTime(0.001, at + dur);
-    src.connect(bp).connect(g).connect(this.master);
+    g.gain.linearRampToValueAtTime(amp, at + 0.0005);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.0005 + dec);
+    src.connect(bp).connect(g).connect(this.grainBus);
     src.start(at, Math.random() * 1.9);
-    src.stop(at + dur + 0.01);
+    src.stop(at + dec + 0.01);
   }
 
   /**
