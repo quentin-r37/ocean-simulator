@@ -22,7 +22,7 @@ L'interface existe en français et en anglais. La langue suit celle du navigateu
 
 | Touche | Outil | Clic | Maj + clic | Alt + clic |
 | --- | --- | --- | --- | --- |
-| `1` | Pelle | creuser d'un niveau : fond plat, jusqu'à une profondeur fixée au début du clic (en traînant, on trace un fossé de niveau) ; une fois pleine, la pelle jette les déblais derrière le trou | vider | tasser |
+| `1` | Pelle | creuser d'un niveau : fond plat, jusqu'à une profondeur fixée au début du clic ; maintenu sur place, le fond continue de descendre (puits) ; en traînant, on trace un fossé de niveau ; une fois pleine, la pelle jette les déblais derrière le trou | vider | tasser |
 | `2` | Seau | remplir (sable, ou eau en visant la mer) | retourner (tour) ou verser l'eau | — |
 | `3` | Seau crénelé | remplir | retourner : tour à créneaux | — |
 | `4` | Moule à muraille | remplir | retourner : rempart crénelé (`F` pour tourner) | — |

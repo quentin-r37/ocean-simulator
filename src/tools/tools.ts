@@ -82,6 +82,10 @@ export class Tools {
   private flattenTarget = 0;
   /** Level the shovel digs down to (taken when the click starts). */
   private digFloor = 0;
+  /** Aimed point at the start of the shovel stroke, how long it has been held, and whether it stays on the spot. */
+  private digAnchor: Vec3 = [0, 0, 0];
+  private digHeld = 0;
+  private digWell = false;
 
   private hitBuf: GPUBuffer;
   private invBuf: GPUBuffer;
@@ -214,7 +218,12 @@ export class Tools {
       switch (this.tool) {
         case 'shovel':
           // One stroke digs one level: a fixed depth below the sand surface aimed at the start of the click.
-          if (pressed && this.hit.valid) this.digFloor = this.hit.pos[1] - this.hit.waterDepth - toolSpec.digDepth;
+          if (pressed && this.hit.valid) {
+            this.digFloor = this.hit.pos[1] - this.hit.waterDepth - toolSpec.digDepth;
+            this.digAnchor = [...this.hit.pos];
+            this.digHeld = 0;
+            this.digWell = true;
+          }
           mode = alt ? Mode.Pat : shift ? Mode.Dump : Mode.Dig;
           break;
         case 'trowel':
@@ -269,8 +278,24 @@ export class Tools {
     }
   }
 
+  /**
+   * Held on the spot, the shovel sinks a well: past the first stroke its floor keeps going down. Once
+   * the aim moves away, it digs a level trench for the rest of the stroke. The aim is measured on the
+   * horizontal plane of the starting point, which does not drift as the hole gets deeper.
+   */
+  private trackDig(origin: Vec3, dir: Vec3, dt: number): void {
+    this.digHeld += dt;
+    if (!this.digWell || Math.abs(dir[1]) < 1e-3) return;
+    const a = this.digAnchor;
+    const t = (a[1] - origin[1]) / dir[1];
+    const moved = Math.hypot(origin[0] + dir[0] * t - a[0], origin[2] + dir[2] * t - a[2]);
+    if (moved > toolSpec.shovelRadius * 0.35) this.digWell = false;
+    else if (this.digHeld > toolSpec.digTime) this.digFloor -= (toolSpec.digDepth / toolSpec.wellTime) * dt;
+  }
+
   encode(encoder: GPUCommandEncoder, cam: IsoCamera, mouse: [number, number], size: [number, number], dt: number, alt: boolean, shift: boolean): void {
     const { origin, dir } = cam.ray(mouse[0], mouse[1], size[0], size[1]);
+    if (this.mode === Mode.Dig) this.trackDig(origin, dir, dt);
     const pf = new Float32Array(this.pickData);
     const pu = new Uint32Array(this.pickData);
     pf.set([origin[0], origin[1], origin[2], 0, dir[0], dir[1], dir[2], 0]);

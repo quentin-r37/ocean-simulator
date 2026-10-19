@@ -3,9 +3,9 @@
 export const WORLD_SIZE = 16; // metres, square diorama
 export const GRAVITY = 9.81;
 /** Water steps per frame at most, time acceleration included (sizes the GPU parameter slots). */
-export const MAX_SUBSTEPS = 64;
+export const MAX_SUBSTEPS = 128;
 /** Time acceleration factors offered by the HUD (V / Shift+V, R3). */
-export const TIME_SCALES = [1, 2, 4, 8];
+export const TIME_SCALES = [1, 2, 4, 8, 16];
 /** Bottom of the diorama slab (the cut faces go down to here). */
 export const SLAB_BOTTOM = -1.4;
 /** Depth of the open sea at the far (+z) edge, at mean tide. */
@@ -112,7 +112,9 @@ export const toolSpec = {
   digTime: 0.45,
   fillTime: 0.45,
   /** Depth (m) one click of the shovel digs down to, below the aimed sand surface. */
-  digDepth: 0.3 * TOOL_SCALE,
+  digDepth: 0.4 * TOOL_SCALE,
+  /** Held on the spot, the floor of the shovel goes down by digDepth every wellTime seconds (a well). */
+  wellTime: 0.9,
   /** The giant bucket scoops from a much wider area, and takes longer to fill. */
   giantFillRadius: 1.5 * TOOL_SCALE,
   giantFillTime: 1.1,
