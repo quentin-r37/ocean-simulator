@@ -40,8 +40,9 @@ fn vs_main(v: VIn, @builtin(instance_index) ii: u32) -> VOut {
   let under = smoothstep(0.02, 0.1, surf.y);
 
   // Wind (dry land) or current (under water) bending, growing with height above the root.
+  // Flag cloth bends with its pole (same offset at the same height), so it stays attached.
   let sway = it.c.w;
-  if (sway > 0.0 && !cloth) {
+  if (sway > 0.0) {
     let hgt = max(v.pos.y, 0.0);
     let wind = mix(cam.env.x, 1.0, under);
     let speed = mix(1.9, 0.9, under);

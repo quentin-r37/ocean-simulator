@@ -34,10 +34,10 @@ export const materialOf = (k: DecorKind) => k.colorIndex ?? (k.stone ? -2 : -1);
 const variants = (f: (seed: number) => MeshData, n: number) => Array.from({ length: n }, (_, k) => f(k + 1));
 
 export const DECOR: DecorKind[] = [
-  { id: 'flagRed', name: { fr: 'Drapeau rouge', en: 'Red flag' }, icon: '🚩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 0 },
-  { id: 'flagPurple', name: { fr: 'Drapeau violet', en: 'Purple flag' }, icon: '🟪', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 1 },
-  { id: 'flagGreen', name: { fr: 'Drapeau vert', en: 'Green flag' }, icon: '🟩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 2 },
-  { id: 'flagYellow', name: { fr: 'Drapeau jaune', en: 'Yellow flag' }, icon: '🟨', meshes: [flagMesh()], yMode: YMode.Ground, sway: 1, scale: [2.2, 2.2], placeable: true, colorIndex: 3 },
+  { id: 'flagRed', name: { fr: 'Drapeau rouge', en: 'Red flag' }, icon: '🚩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 0.2, scale: [2.2, 2.2], placeable: true, colorIndex: 0 },
+  { id: 'flagPurple', name: { fr: 'Drapeau violet', en: 'Purple flag' }, icon: '🟪', meshes: [flagMesh()], yMode: YMode.Ground, sway: 0.2, scale: [2.2, 2.2], placeable: true, colorIndex: 1 },
+  { id: 'flagGreen', name: { fr: 'Drapeau vert', en: 'Green flag' }, icon: '🟩', meshes: [flagMesh()], yMode: YMode.Ground, sway: 0.2, scale: [2.2, 2.2], placeable: true, colorIndex: 2 },
+  { id: 'flagYellow', name: { fr: 'Drapeau jaune', en: 'Yellow flag' }, icon: '🟨', meshes: [flagMesh()], yMode: YMode.Ground, sway: 0.2, scale: [2.2, 2.2], placeable: true, colorIndex: 3 },
   { id: 'shell', name: { fr: 'Coquillage', en: 'Shell' }, icon: '🐚', meshes: [shellMesh()], yMode: YMode.Ground, sway: 0, scale: [2.6, 3.6], placeable: true },
   { id: 'starfish', name: { fr: 'Étoile de mer', en: 'Starfish' }, icon: '⭐', meshes: [starfishMesh()], yMode: YMode.Ground, sway: 0, scale: [2.4, 3.2], placeable: true },
   { id: 'rock', name: { fr: 'Rocher', en: 'Rock' }, icon: '🪨', meshes: variants((s) => rockMesh(s + 40), 4), yMode: YMode.Ground, sway: 0, scale: [0.15, 0.35], placeable: true, stone: true },
